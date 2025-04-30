@@ -53,15 +53,16 @@ fn eval_king(board: &Board, us: Colour) -> Score {
     safety_score
 }
 
-pub fn evaluate(board: &Board, pawn_table: &mut PawnTable) -> Eval {
+// pub fn evaluate(board: &Board, pawn_table: &mut PawnTable) -> Eval {
+pub fn evaluate(board: &Board) -> Eval {
     let mut score = calc_psqt(board);
 
-    let pawn_entry = &mut pawn_table.get(board);
+    // let pawn_entry = &mut pawn_table.get(board);
 
-    score += pawn_entry.scores[Colour::White as usize];
-    score -= pawn_entry.scores[Colour::Black as usize];
-    score += pawn_entry.king_safety(board, Colour::White);
-    score -= pawn_entry.king_safety(board, Colour::Black);
+    // score += pawn_entry.scores[Colour::White as usize];
+    // score -= pawn_entry.scores[Colour::Black as usize];
+    // score += pawn_entry.king_safety(board, Colour::White);
+    // score -= pawn_entry.king_safety(board, Colour::Black);
 
     // score += eval_king(board, Colour::White);
     // score -= eval_king(board, Colour::Black);

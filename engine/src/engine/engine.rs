@@ -177,7 +177,8 @@ impl EngineController {
         );
         println!(
             "{}",
-            evaluate(&self.board, &mut self.thread_pool.main_worker.pawn_table)
+            // evaluate(&self.board, &mut self.thread_pool.main_worker.pawn_table)
+            evaluate(&self.board)
         )
     }
 }
