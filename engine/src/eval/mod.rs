@@ -2,7 +2,7 @@ mod eval;
 mod pawns;
 mod psqt;
 
-pub use eval::evaluate;
+pub use eval::{evaluate, evaluate_nnue};
 pub use pawns::PawnTable;
 pub use psqt::calc_psqt;
 

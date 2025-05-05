@@ -4,19 +4,18 @@ use std::sync::{
 };
 
 use chess::{Board, Move};
+use nnue::accummulator::Accumulator;
 
 use crate::{
     History, KillerTable, MainHistory,
     engine::MAX_DEPTH,
-    eval::{Eval, PawnTable, evaluate},
+    eval::{Eval, PawnTable},
+    evaluate, evaluate_nnue,
     movepick::MovePicker,
     search::{PVLine, SearchStack},
 };
 
-use super::{
-    Clock, MIN_DEPTH, NodeTypeTrait, NonPV, PV, Root, TT,
-    tt::{self, TTBound},
-};
+use super::{Clock, MIN_DEPTH, NodeTypeTrait, PV, Root, TT, tt::TTBound};
 
 #[derive(Debug, Clone, Default)]
 pub struct SearchStats {
@@ -45,6 +44,9 @@ pub(crate) struct SearchWorker {
     stop: bool,
     // Tables
     pub pawn_table: PawnTable,
+
+    // nnue
+    pub nnue: Accumulator,
 }
 
 impl SearchWorker {
@@ -63,6 +65,7 @@ impl SearchWorker {
             stop: false,
             pawn_table: PawnTable::new(),
             stats: SearchStats::default(),
+            nnue: Accumulator::default(),
         }
     }
 
@@ -379,7 +382,8 @@ impl SearchWorker {
 
         // Check ply limit to prevent infinite recursion in rare cases
         if self.ply >= MAX_DEPTH as u16 {
-            return evaluate(&self.board, &mut self.pawn_table); // Return static eval if too deep
+            return evaluate_nnue(&self.board, &mut self.nnue);
+            // return evaluate(&self.board, &mut self.pawn_table);
         }
 
         // Check for draws (Repetition, 50-move rule)
@@ -392,7 +396,8 @@ impl SearchWorker {
         // --- Stand Pat Score ---
         // Get the static evaluation of the current position.
         // This score assumes no further captures are made (the "stand pat" score).
-        let stand_pat = evaluate(&self.board, &mut self.pawn_table);
+        let stand_pat = evaluate_nnue(&self.board, &mut self.nnue);
+        // let stand_pat = evaluate(&self.board, &mut self.pawn_table);
 
         // --- Alpha-Beta Pruning based on Stand Pat ---
         // If the static evaluation is already >= beta, the opponent won't allow this position.

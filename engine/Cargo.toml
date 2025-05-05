@@ -9,3 +9,4 @@ doctest = false
 [dependencies]
 chess = { path = "../chess" }
 macros = { path = "../macros" }
+nnue = { path = "../nnue" }

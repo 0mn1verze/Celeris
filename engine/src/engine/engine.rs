@@ -13,6 +13,7 @@ use chess::{
 // Import local modules (evaluation, threading, transposition table).
 use crate::{
     eval::{calc_psqt, evaluate},
+    evaluate_nnue,
     search::TT,
     thread::ThreadPool,
 };
@@ -202,8 +203,13 @@ impl EngineController {
             calc_psqt(&self.board).1
         );
         println!(
-            "{}",
+            "standard {}",
             evaluate(&self.board, &mut self.thread_pool.main_worker.pawn_table)
+        );
+
+        println!(
+            "nnue {}",
+            evaluate_nnue(&self.board, &mut self.thread_pool.main_worker.nnue)
         )
     }
 
