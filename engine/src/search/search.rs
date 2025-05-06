@@ -47,10 +47,6 @@ pub(crate) struct SearchWorker {
     pub pawn_table: PawnTable,
 }
 
-// --- Constants ---
-const ASPIRATION_START_DEPTH: usize = 4;
-const ASPIRATION_DELTA: Eval = Eval(10);
-
 impl SearchWorker {
     pub fn new(thread_id: usize, stop: Arc<AtomicBool>, nodes: Arc<AtomicU64>) -> Self {
         Self {
@@ -124,7 +120,7 @@ impl SearchWorker {
         self.depth = 0;
 
         while self.should_start_iteration() {
-            self.aspiration_windows(tt);
+            self.search_position(tt);
 
             if self.stop {
                 break;
@@ -136,72 +132,22 @@ impl SearchWorker {
         println!("bestmove {}", self.pv[0]);
     }
 
-    fn aspiration_windows(&mut self, tt: &TT) {
-        // let alpha = -Eval::INFINITY;
-        // let beta = Eval::INFINITY;
-
-        // let mut pv = PVLine::default();
-
-        // let eval = self.negamax::<Root>(tt, &mut pv, alpha, beta, self.depth + 1);
-
-        // if self.stop {
-        //     return;
-        // }
-
-        // self.eval = eval;
-
-        // self.pv = pv;
-
-        // self.print_info(tt);
-
-        let mut alpha = -Eval::INFINITY;
-        let mut beta = Eval::INFINITY;
-        let mut new_depth = self.depth + 1;
-
-        if self.depth >= ASPIRATION_START_DEPTH
-            && self.eval <= Eval::MATE_BOUND
-            && self.eval >= -Eval::MATE_BOUND
-        {
-            alpha = self.eval - ASPIRATION_DELTA;
-            beta = self.eval + ASPIRATION_DELTA;
-        }
+    fn search_position(&mut self, tt: &TT) {
+        let alpha = -Eval::INFINITY;
+        let beta = Eval::INFINITY;
 
         let mut pv = PVLine::default();
 
-        loop {
-            let value = self.negamax::<Root>(tt, &mut pv, alpha, beta, new_depth);
+        let eval = self.negamax::<Root>(tt, &mut pv, alpha, beta, self.depth + 1);
 
-            if self.stop {
-                break;
-            }
-
-            // Check if the score is outside the aspiration window
-            // Check if the position is worse than we thought
-            if value <= alpha {
-                // Fail Low (make alpha lower)
-                alpha = (-Eval::INFINITY).max(alpha - ASPIRATION_DELTA);
-                // Shift beta to be lower than before (since the actual score is lower than expected, so we shift the window)
-                beta = Eval((alpha.0 + beta.0) / 2);
-                // Reset depth
-                new_depth = self.depth + 1;
-            // Check if the position is better than we thought
-            } else if value >= beta {
-                // Fail High (make beta higher)
-                beta = (Eval::INFINITY).min(value + ASPIRATION_DELTA);
-                self.pv = pv.clone();
-
-                // If the score is not a mate and the new_depth is at least one, reduce the depth (Do a shallower check with a shifted window to see if the moves are actually good)
-                if value.abs() < Eval::MATE_BOUND && new_depth >= 1 {
-                    new_depth -= 1;
-                }
-            // If the score is within bounds, then the search is finished, so we update the eval and the pv of the worker and exit the loop
-            } else {
-                self.eval = value;
-                self.pv = pv;
-                break;
-            }
+        if self.stop {
+            return;
         }
-        // Print the search info to the cli
+
+        self.eval = eval;
+
+        self.pv = pv;
+
         self.print_info(tt);
     }
 
@@ -278,7 +224,7 @@ impl SearchWorker {
         tt: &TT,
         pv: &mut PVLine,
         mut alpha: Eval,
-        mut beta: Eval,
+        beta: Eval,
         mut depth: usize,
     ) -> Eval {
         // Clear pv for new search
@@ -295,28 +241,8 @@ impl SearchWorker {
             return self.quiescence::<NT>(tt, pv, alpha, beta);
         }
 
-        if !NT::ROOT {
-            // Check if max depth is reached and the last move did not result in a check,
-            // if so return the static evaluation as that is the maximum size of the search tree.
-            if self.ply >= MAX_DEPTH as u16 && !in_check {
-                return evaluate(&self.board, &mut self.pawn_table);
-            }
-
-            // Check if the position is a draw
-            if self.board.is_draw(self.ply) {
-                return Eval::DRAW;
-            }
-
-            // Alpha (best we can do) should be better than being mated in our current number of plies
-            alpha = alpha.max(Eval::mated_in(self.ply));
-            // Beta (best the opponent can do) should be better than being mated in the next move
-            beta = beta.min(Eval::mate_in(self.ply + 1));
-
-            // If the score returned is better or worse than all the possible scores
-            // achievable, then there is no reason to continue searching this node
-            if alpha >= beta {
-                return alpha;
-            }
+        if self.is_draw::<NT>() {
+            return Eval::DRAW;
         }
 
         // --- Set up Search ---
@@ -331,19 +257,20 @@ impl SearchWorker {
         self.stats.killers.clear_child(self.ply);
 
         // --- Hash Table Lookup ---
+
         let tt_entry = tt.get(self.board.key());
         let mut tt_move = Move::NONE;
 
         if let Some(entry) = tt_entry {
             let tt_value = entry.value.from_tt(self.ply);
 
-            if !NT::PV && entry.depth >= depth as u8 {
-                match entry.bound {
-                    TTBound::Exact => return tt_value,
-                    TTBound::Lower if !in_check && tt_value >= beta => return beta,
-                    TTBound::Upper if !in_check && tt_value <= alpha => return alpha,
-                    _ => {}
-                }
+            if !NT::PV
+                && entry.depth >= depth as u8
+                && (entry.bound == TTBound::Exact
+                    || entry.bound == TTBound::Lower && tt_value >= beta
+                    || entry.bound == TTBound::Upper && tt_value <= alpha)
+            {
+                return tt_value;
             }
 
             // Update best move from hash table
@@ -351,6 +278,7 @@ impl SearchWorker {
         }
 
         // --- Set up main loop ---
+
         let mut best_value = -Eval::INFINITY;
         let mut best_move = Move::NONE;
         let mut move_count = 0;
@@ -368,30 +296,9 @@ impl SearchWorker {
             // Make move and update ply, node counters, prefetch hash entry, etc...
             self.make_move(tt, move_);
 
-            // If the node is a pv node and its the first move (assumed to be PV) and/or value is greater than alpha (Failed low)
-            // --- Principal Variation Search (PVS) ---
-            let mut value;
-            if NT::PV && move_count == 1 {
-                // First move: Search with full window
-                value = -self.negamax::<PV>(tt, &mut child_pv, -beta, -alpha, depth - 1);
-            } else {
-                // Subsequent moves: Try Zero-Window Search first
-                // Search with a null window (alpha, alpha + 1)
-                // Reason: we assume the best move is always the first move (not always true),
-                // but it is beneficial if we try to show that the other moves are not better,
-                // which we can do by a searching with a null window (Quickly check if the other moves are any good)
-                value =
-                    -self.negamax::<NonPV>(tt, &mut child_pv, -alpha - Eval(1), -alpha, depth - 1);
-
-                // If search failed high (value > alpha) and is still within beta bounds,
-                // it means this move is better than the current best. Re-search with full window.
-                if value > alpha && value < beta {
-                    value = -self.negamax::<PV>(tt, &mut child_pv, -beta, -alpha, depth - 1);
-                }
-            }
-
+            // TODO: Principal Variation Search
             // Recursive search
-            // let value = -self.negamax::<PV>(tt, &mut child_pv, -beta, -alpha, depth - 1);
+            let value = -self.negamax::<PV>(tt, &mut child_pv, -beta, -alpha, depth - 1);
             // Undo move and decrement ply counter
             self.undo_move(move_);
 
@@ -408,9 +315,7 @@ impl SearchWorker {
             if value > alpha {
                 // We found a new best move sequence overall.
                 best_move = move_; // Update the best move.
-                if NT::PV {
-                    pv.update_line(move_, &child_pv); // Update the Principal Variation (best move sequence).
-                }
+                pv.update_line(move_, &child_pv); // Update the Principal Variation (best move sequence).
                 alpha = value; // Update alpha: Raise the lower bound of our guaranteed score.
             }
 
@@ -462,7 +367,7 @@ impl SearchWorker {
         tt: &TT,
         pv: &mut PVLine,
         mut alpha: Eval,
-        mut beta: Eval,
+        beta: Eval,
     ) -> Eval {
         self.update_seldepth::<NT>();
 
@@ -472,18 +377,17 @@ impl SearchWorker {
             return Eval::DRAW;
         }
 
-        let in_check = self.board.in_check();
-
-        // Check if max depth is reached and the last move did not result in a check,
-        // if so return the static evaluation as that is the maximum size of the search tree.
-        if self.ply >= MAX_DEPTH as u16 && !in_check {
-            return evaluate(&self.board, &mut self.pawn_table);
+        // Check ply limit to prevent infinite recursion in rare cases
+        if self.ply >= MAX_DEPTH as u16 {
+            return evaluate(&self.board, &mut self.pawn_table); // Return static eval if too deep
         }
 
         // Check for draws (Repetition, 50-move rule)
-        if self.board.is_draw(self.ply) {
+        if self.is_draw::<NT>() {
             return Eval::DRAW;
         }
+
+        let in_check = self.board.in_check();
 
         // --- Stand Pat Score ---
         // Get the static evaluation of the current position.
@@ -509,17 +413,12 @@ impl SearchWorker {
         if let Some(entry) = tt_entry {
             let tt_value = entry.value.from_tt(self.ply);
 
-            if !NT::PV {
-                match entry.bound {
-                    TTBound::Exact => return tt_value,
-                    TTBound::Lower if !in_check && tt_value >= beta => return beta,
-                    TTBound::Upper if !in_check && tt_value <= alpha => return alpha,
-                    _ => {}
-                }
+            match entry.bound {
+                TTBound::Exact => return tt_value,
+                TTBound::Lower if !NT::PV && !in_check && tt_value >= beta => return beta,
+                TTBound::Upper if !NT::PV && !in_check && tt_value <= alpha => return alpha,
+                _ => tt_move = entry.best_move,
             }
-
-            // Update best move from hash table
-            tt_move = entry.best_move;
         }
 
         // Initialize best_value with stand_pat. We are looking for captures that improve on this.
@@ -546,9 +445,7 @@ impl SearchWorker {
 
             if value > alpha {
                 best_move = move_; // Update the best move.
-                if NT::PV {
-                    pv.update_line(move_, &child_pv); // Update PV line for quiescence
-                }
+                pv.update_line(move_, &child_pv); // Update PV line for quiescence
                 alpha = value; // Update alpha
             }
 
@@ -631,9 +528,9 @@ impl SearchWorker {
         );
     }
 
-    // fn is_draw<NT: NodeTypeTrait>(&mut self) -> bool {
-    //     !NT::ROOT && self.board.is_draw(self.ply)
-    // }
+    fn is_draw<NT: NodeTypeTrait>(&mut self) -> bool {
+        !NT::ROOT && self.board.is_draw(self.ply)
+    }
 
     fn terminal_score(&self, in_check: bool) -> Eval {
         if in_check {

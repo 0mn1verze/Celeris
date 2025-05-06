@@ -36,7 +36,7 @@ impl Magic {
     /// `occ` should represent the occupied squares on the board.
     /// The formula is `pext(occ, mask) + offset`.
     #[cfg(target_feature = "bmi2")]
-    pub(crate) const fn index(self, occ: Bitboard) -> usize {
+    pub(crate) fn index(self, occ: Bitboard) -> usize {
         occ.pext(self.mask.0) as usize + self.offset
     }
 }
@@ -130,6 +130,7 @@ fn populate_table(
 }
 
 /// # Find suitable magic numbers
+#[cfg(not(target_feature = "bmi2"))]
 fn find_magics<const N: usize>(
     seed: u64,
     m: &mut Magic,
@@ -285,9 +286,11 @@ pub(crate) const fn get_edge_mask(sq: Square) -> Bitboard {
 pub(crate) const fn init_magic_struct(pt: PieceType, sq: Square, offset: &mut usize) -> Magic {
     let mask = attacks_on_the_fly(pt, sq, Bitboard::EMPTY).bitand(get_edge_mask(sq).not());
 
-    let mut m = Magic {
+    let m = Magic {
+        #[cfg(not(target_feature = "bmi2"))]
         magic: 0,
-        mask: mask,
+
+        mask,
         shift: 64 - mask.count_bits() as u8,
         offset: *offset,
     };
@@ -298,6 +301,7 @@ pub(crate) const fn init_magic_struct(pt: PieceType, sq: Square, offset: &mut us
 }
 
 /// # Find Best Magic Seeds
+#[cfg(not(target_feature = "bmi2"))]
 pub fn find_best_magic_seeds<const N: usize>(pt: PieceType) {
     let mut offset = 0;
     let mut magic = [Magic::default(); Square::NUM];

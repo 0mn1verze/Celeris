@@ -169,6 +169,7 @@ pub(crate) const fn attacks_on_the_fly(pt: PieceType, sq: Square, occ: Bitboard)
 ///
 /// # Panics
 /// Panics at compile time if `pt` is not `PieceType::Bishop` or `PieceType::Rook`.
+#[cfg(not(target_feature = "bmi2"))]
 pub(super) const fn populate_magic_table(pt: PieceType) -> MagicTable {
     let mut offset = 0;
     let mut magic = [Magic::EMPTY; Square::NUM];

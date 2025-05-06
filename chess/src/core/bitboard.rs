@@ -710,9 +710,9 @@ impl Bitboard {
     /// Return the extract bits using the intrinsic PEXT instruction
     #[cfg(target_feature = "bmi2")]
     #[inline]
-    pub const fn pext(&self, mask: Bitboard) -> Bitboard {
+    pub fn pext(&self, mask: u64) -> u64 {
         use core::arch::x86_64::_pext_u64;
-        unsafe { _pext_u64(self.0, mask.0) }
+        unsafe { _pext_u64(self.0, mask) }
     }
 
     #[inline]

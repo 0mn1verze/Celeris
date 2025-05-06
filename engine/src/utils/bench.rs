@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-const SEARCH_DEPTH: usize = 8;
+const SEARCH_DEPTH: usize = 6;
 
 const FENS: [&str; 66] = [
     "1r2r2k/1b4q1/pp5p/2pPp1p1/P3Pn2/1P1B1Q1P/2R3P1/4BR1K b - - 1 37",
@@ -86,9 +86,9 @@ pub fn run_bench() {
     let mut total_time = 0;
 
     tt.reset_age();
+    thread.clear_hash_table(&tt);
 
     for (i, fen) in FENS.iter().enumerate() {
-        thread.clear_hash_table(&tt);
         let mut board = Board::from_fen(fen).unwrap();
 
         let start = Instant::now();
