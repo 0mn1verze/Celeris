@@ -20,7 +20,9 @@ fn main() {
                 .next()
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or_else(|| {
-                    println!("info string No depth specified for bench or invalid format, using default depth {DEFAULT_CMD_BENCH_DEPTH}."); 
+                    println!(
+                        "info string invalid format, using default depth {DEFAULT_CMD_BENCH_DEPTH}."
+                    );
                     DEFAULT_CMD_BENCH_DEPTH
                 });
             if depth == 0 {
