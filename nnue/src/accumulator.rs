@@ -31,7 +31,6 @@ impl Default for Accumulator {
 pub const ON: bool = true;
 pub const OFF: bool = false;
 
- 
 const fn index(c: usize, p: usize, s: usize) -> (usize, usize) {
     const C_BASE: usize = 384;
     const P_BASE: usize = 64;
@@ -42,8 +41,8 @@ const fn index(c: usize, p: usize, s: usize) -> (usize, usize) {
     (w * L1, b * L1)
 }
 
- 
 impl Accumulator {
+    #[inline(never)]
     fn update_weights<const ON: bool>(&mut self, ft: (usize, usize)) {
         let update = |acc: &mut SideAccumulator, idx: usize| {
             acc.iter_mut()
@@ -57,9 +56,7 @@ impl Accumulator {
         update(&mut self.black, ft.1);
     }
 
-     
     pub fn update(&mut self, board: &Board) {
-         
         for c in 0..2 {
             let old_c = self.c_bb[c];
             let new_c = board.occupied[c];
@@ -68,13 +65,11 @@ impl Accumulator {
                 let old_pc = old_c & self.p_bb[p];
                 let new_pc = new_c & board.pieces[p];
 
-                 
                 (new_pc & !old_pc).for_each(|s| {
                     let ft = index(c, p, s.index());
                     self.update_weights::<ON>(ft);
                 });
 
-                 
                 (old_pc & !new_pc).for_each(|s| {
                     let ft = index(c, p, s.index());
                     self.update_weights::<OFF>(ft);
@@ -82,19 +77,16 @@ impl Accumulator {
             }
         }
 
-         
         self.c_bb = board.occupied;
         self.p_bb = board.pieces;
     }
 }
 
- 
 #[inline]
 pub fn screlu(x: i16) -> i32 {
     (x.clamp(0, QA as i16) as i32).pow(2)
 }
 
- 
 impl Accumulator {
     pub fn evaluate(&mut self, board: &Board) -> i32 {
         self.update(board);

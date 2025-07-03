@@ -30,10 +30,18 @@ pub struct HistoryEntry<const MAX: i16> {
 }
 
 impl<const MAX: i16> HistoryEntry<MAX> {
+    /// # Returns a reference to the entry value
     pub fn get(&self) -> Eval {
         self.entry
     }
 
+    /// # Updates history
+    ///
+    /// ### History gravity formula
+    /// - https://www.chessprogramming.org/History_Heuristic
+    ///
+    /// - Scales up history when a beta cutoff is unexpected, and scales down history when a beta cutoff is expected
+    /// - Keeps the history values clamped between MAX and -MAX
     pub fn update(&mut self, bonus: i16) {
         let bonus = bonus.clamp(-MAX, MAX);
         let product = self.entry.0 as i64 * bonus.abs() as i64 / MAX as i64;
@@ -44,14 +52,20 @@ impl<const MAX: i16> HistoryEntry<MAX> {
 pub const MAX_MAIN_HISTORY: i16 = 16384;
 
 pub trait History<const MAX: i16> {
+    /// Returns an immutable reference to the history entry.
+    /// Implementors must provide this method.
     fn get_entry_ref(&self, board: &Board, move_: Move) -> &HistoryEntry<MAX>;
-
+    /// Returns a mutable reference to the history entry for updates.
+    /// Implementors must provide this method.
     fn probe_mut(&mut self, board: &Board, move_: Move) -> &mut HistoryEntry<MAX>;
 
+    /// Gets the immutable Eval score for a move.
+    /// This is automatically implemented using `get_entry_ref`.
     fn get(&self, board: &Board, move_: Move) -> Eval {
         self.get_entry_ref(board, move_).get()
     }
 
+    /// Updates the history score for a move.
     fn update(&mut self, board: &Board, move_: Move, bonus: i16) {
         let entry = self.probe_mut(board, move_);
         entry.update(bonus);
@@ -79,8 +93,10 @@ impl Default for MainHistory {
 }
 
 impl MainHistory {
+    /// Helper function to get the indices for the history table.
     #[inline(always)]
     fn get_indices(board: &Board, move_: Move) -> (usize, usize, usize) {
+        // Safety: Assumes the 'from' square is occupied, which should be true for valid moves.
         let moved_piece = unsafe { board.on(move_.from()).unwrap_unchecked() };
         (
             board.stm() as usize,

@@ -1,4 +1,4 @@
-use crate::accummulator::SideAccumulator;
+use crate::accumulator::SideAccumulator;
 #[cfg(any(target_feature = "avx2", target_feature = "avx512f"))]
 use crate::params::QA;
 
@@ -21,9 +21,8 @@ pub fn flatten(acc: &SideAccumulator, weights: &SideAccumulator) -> i32 {
 
 #[cfg(not(any(target_feature = "avx2", target_feature = "avx512f")))]
 mod fallback {
-    use crate::{accummulator::SideAccumulator, params::QA};
+    use crate::{accumulator::SideAccumulator, params::QA};
 
-     
     #[inline]
     pub fn screlu(x: i16) -> i32 {
         (x.clamp(0, QA as i16) as i32).pow(2)
@@ -46,7 +45,7 @@ mod avx2 {
     use std::arch::x86_64::*;
 
     use crate::{
-        accummulator::SideAccumulator,
+        accumulator::SideAccumulator,
         params::{L1, QA},
     };
 
@@ -102,7 +101,7 @@ mod avx512 {
     use std::arch::x86_64::*;
 
     use crate::{
-        accummulator::SideAccumulator,
+        accumulator::SideAccumulator,
         params::{L1, QA},
     };
 

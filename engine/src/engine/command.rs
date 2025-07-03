@@ -1,5 +1,6 @@
 use std::str::{FromStr, SplitWhitespace};
 
+// Import necessary types from the chess crate and the parent module.
 use super::TimeControl;
 use chess::{
     Move, MoveFlag,
@@ -9,8 +10,10 @@ use chess::{
 use super::options::EngineOption;
 
 #[derive(Debug, PartialEq, Eq)]
-
+/// Represents commands that can be sent to the chess engine, primarily following the UCI protocol.
 pub enum Command {
+    // --- Standard UCI Commands ---
+    // Standard UCI commands from https://www.shredderchess.com/chess-features/uci-universal-chess-interface.html
     Uci,
     Debug(bool),
     IsReady,
@@ -21,6 +24,7 @@ pub enum Command {
     Stop,
     Quit,
 
+    // --- Custom/Non-UCI Commands ---
     Perft(usize),
     Print,
     Bench,
@@ -30,6 +34,7 @@ pub enum Command {
 impl FromStr for Command {
     type Err = UCICommandError;
 
+    /// Parses a string slice into a `Command`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut tokens = s.split_whitespace();
 
@@ -44,7 +49,7 @@ impl FromStr for Command {
             Some("stop") => Ok(Self::Stop),
             Some("quit") => Ok(Self::Quit),
             Some("perft") => Self::parse_perft(tokens),
-
+            // Custom commands
             Some("bench") => Ok(Self::Bench),
             Some("eval") => Ok(Self::Eval),
             Some("b") => Ok(Self::Print),
@@ -55,6 +60,7 @@ impl FromStr for Command {
 }
 
 impl Command {
+    /// Parses the "debug" command arguments ("on" or "off").
     fn parse_debug<'a>(mut tokens: SplitWhitespace) -> Result<Self, UCICommandError> {
         match tokens.next() {
             Some("on") => Ok(Self::Debug(true)),
@@ -63,18 +69,21 @@ impl Command {
         }
     }
 
+    /// Parses the "setoption" command, extracting the option name and value.
     fn parse_option<'a>(mut tokens: SplitWhitespace) -> Result<Self, UCICommandError> {
+        // Expect "name"
         if tokens.next() != Some("name") {
             return Err(UCICommandError(
                 "Expected 'name' after setoption".to_string(),
             ));
         }
 
+        // Collect words until "value" is found (option names can have spaces)
         let mut name_parts = Vec::new();
         let mut next_token = tokens.next();
         while let Some(token) = next_token {
             if token == "value" {
-                break;
+                break; // Found "value", stop collecting name parts
             }
             name_parts.push(token);
             next_token = tokens.next();
@@ -91,9 +100,12 @@ impl Command {
     }
 
     fn parse_position<'a>(mut tokens: SplitWhitespace) -> Result<Self, UCICommandError> {
+        // Example: "position startpos moves e2e4 e7e5"
+        // 1. Determine initial board state (startpos or fen)
         let mut board = match tokens.next() {
             Some("startpos") => Board::default(),
             Some("fen") => {
+                // Consume "fen", then collect exactly 6 FEN parts
                 let fen_parts: Vec<&str> = tokens.by_ref().take(Board::FEN_SECTIONS).collect();
 
                 Self::parse_fen(fen_parts)?
@@ -101,20 +113,25 @@ impl Command {
             _ => return Err(UCICommandError(format!("Invalid position command"))),
         };
 
+        // 2. Check if the *next* token is "moves"
         match tokens.next() {
             Some("moves") => {
+                // 3. Process remaining tokens as moves
                 for move_str in tokens {
                     let move_ = Self::parse_move(move_str, &board)?;
                     board.make_move(move_);
                 }
             }
-
+            // If the token after position setup wasn't "moves", or if there were no more tokens,
+            // we just stop. The board remains as set initially.
+            // Any remaining tokens after position setup but before "moves" are ignored.
             _ => {}
         };
 
         Ok(Command::Position(board))
     }
 
+    /// Helper to parse a FEN string from collected parts.
     fn parse_fen<'a>(fen_parts: Vec<&str>) -> Result<Board, UCICommandError> {
         if fen_parts.len() < 6 {
             return Err(UCICommandError(
@@ -127,6 +144,7 @@ impl Command {
             .map_err(|e| UCICommandError(format!("Invalid FEN string -> {}", e)))?)
     }
 
+    /// Helper to parse a move string (e.g., "e2e4") in the context of the current board.
     fn parse_move<'a>(move_str: &str, board: &Board) -> Result<Move, UCICommandError> {
         let mut move_list = MoveList::new();
         board.generate_moves::<LegalGen>(&mut move_list);
@@ -144,6 +162,7 @@ impl Command {
             .copied()
     }
 
+    /// Parses the "go" command and its various time control parameters.
     fn parse_go<'a>(tokens: SplitWhitespace) -> Result<Self, UCICommandError> {
         let tc = tokens
             .collect::<Vec<&str>>()
@@ -154,6 +173,7 @@ impl Command {
         Ok(Self::Go(tc))
     }
 
+    /// Parses the "perft" command and its depth argument.
     fn parse_perft<'a>(mut tokens: SplitWhitespace) -> Result<Self, UCICommandError> {
         match tokens.next() {
             Some(depth) => {
@@ -167,6 +187,7 @@ impl Command {
     }
 }
 
+/// Custom error type for UCI command parsing failures.
 #[derive(Debug)]
 pub struct UCICommandError(pub String);
 

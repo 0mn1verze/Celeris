@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use chess::{Move, board::Key};
+use chess::Move;
 
 use crate::{eval::Eval, thread::ThreadPool};
 
@@ -11,21 +11,21 @@ use crate::{eval::Eval, thread::ThreadPool};
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Debug, Default)]
 pub enum TTBound {
     #[default]
-    Upper,
-    Lower,
-    Exact,
-    None,
+    Upper, // Fail low nodes
+    Lower, // Fail-High nodes (Beta cutoff)
+    Exact, // PV nodes
+    None,  // Just writing to tt
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct TTEntry {
-    pub key: Key,
-    pub age: u8,
-    pub depth: u8,
-    pub bound: TTBound,
-    pub best_move: Move,
-    pub eval: Eval,
-    pub value: Eval,
+    pub key: u64,        // 64 bits
+    pub age: u8,         //  7 bits
+    pub depth: u8,       //  7 bits
+    pub bound: TTBound,  //  2 bits
+    pub best_move: Move, // 16 bits
+    pub eval: Eval,      // 16 bits
+    pub value: Eval,     // 16 bits
 }
 
 impl TTEntry {
@@ -66,7 +66,7 @@ impl TTEntry {
     }
 }
 
-impl From<TTEntry> for (Key, u64) {
+impl From<TTEntry> for (u64, u64) {
     fn from(entry: TTEntry) -> Self {
         let mut data = 0;
         data |= entry.age as u64;
@@ -79,8 +79,8 @@ impl From<TTEntry> for (Key, u64) {
     }
 }
 
-impl From<(Key, u64)> for TTEntry {
-    fn from((key, data): (Key, u64)) -> Self {
+impl From<(u64, u64)> for TTEntry {
+    fn from((key, data): (u64, u64)) -> Self {
         Self {
             key: key ^ data,
             age: Self::unpack_age(data),
@@ -92,6 +92,56 @@ impl From<(Key, u64)> for TTEntry {
         }
     }
 }
+
+// The entry stored in the TT itself.
+// This is the full compressed TT value, stored in 64 bits.
+// The extra 64 bits are a checksum, where we can make sure that the key
+// is valid and has not been modified by two threads simultaneously.
+
+/// Packed TT key
+///
+/// ## Packing Scheme
+///
+/// | Field     | Bits | Offset |
+/// | --------- | ---- | ------ |
+/// | age       | 7    | 0      |
+/// | depth     | 7    | 7      |
+/// | bound     | 2    | 14     |
+/// | best_move | 16   | 16     |
+/// | eval      | 16   | 32     |
+/// | value     | 16   | 48     |
+///
+/// ## Checksum
+///
+/// The checksum is calculated by XORing the key with the data.
+///
+/// ## Usage
+///
+/// The key is used to index into the TT.
+/// The data is used to store the TT entry.
+/// The checksum is used to verify that the key is valid.
+///
+/// ## Example
+///
+/// ```
+/// use std::sync::atomic::{AtomicU64, Ordering};
+/// use chess::Move;
+/// use crate::types::tt::{TTBound, TTEntry};
+///
+/// let mut entry = TTEntry::default();
+/// entry.age = 1;
+/// entry.depth = 2;
+/// entry.bound = TTBound::Exact;
+/// entry.best_move = Move::default();
+/// entry.eval = 100;
+/// entry.value = 200;
+/// entry.key = 12345;
+///
+// / let packed = entry.pack();
+// / let unpacked = TTEntry::unpack(packed.key.load(Ordering::Relaxed), packed.data.load(Ordering::Relaxed));
+///
+/// assert_eq!(entry, unpacked);
+///
 
 #[derive(Debug, Default)]
 struct PackedTTEntry {
@@ -122,13 +172,17 @@ impl PackedTTEntry {
         self.data.store(data, Ordering::Relaxed);
     }
 
+    /// Clears the atomic values in this entry.
     #[inline]
     fn clear(&self) {
+        // Use Relaxed ordering as we don't need synchronization between
+        // clearing different entries, just atomicity for each store.
         self.key.store(0, Ordering::Relaxed);
         self.data.store(0, Ordering::Relaxed);
     }
 }
 
+/// Transposition table
 pub struct TT {
     table: Vec<PackedTTEntry>,
     age: u8,
@@ -154,6 +208,7 @@ impl TT {
         (mb << 20) / size_of::<PackedTTEntry>()
     }
 
+    /// Creates an empty hash table (Only used for tests)
     pub fn new() -> Self {
         Self {
             table: Vec::new(),
@@ -170,22 +225,27 @@ impl TT {
         self.table.len()
     }
 
-    fn index(&self, pos_key: Key) -> usize {
+    fn index(&self, pos_key: u64) -> usize {
         let key = pos_key as u128;
         let len = self.table.len() as u128;
         ((key * len) >> 64) as usize
     }
 
-    pub fn get(&self, pos_key: Key) -> Option<TTEntry> {
+    pub fn get(&self, pos_key: u64) -> Option<TTEntry> {
         self.table[self.index(pos_key)].read(pos_key)
     }
 
-    fn get_unchecked(&self, pos_key: Key) -> &PackedTTEntry {
+    fn get_unchecked(&self, pos_key: u64) -> &PackedTTEntry {
         unsafe { self.table.get_unchecked(self.index(pos_key)) }
     }
 
+    /// Prefetches the hash table entry for the given position key.
+    ///
+    /// Note that prefetching is a hint to the processor and may not always result in
+    /// a cache load, depending on various factors like cache size and memory
+    /// controller behavior.
     #[inline]
-    pub fn prefetch(&self, key: Key) {
+    pub fn prefetch(&self, key: u64) {
         #[cfg(target_arch = "x86_64")]
         unsafe {
             use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
@@ -196,7 +256,7 @@ impl TT {
 
     pub fn write(
         &self,
-        key: Key,
+        key: u64,
         bound: TTBound,
         ply: u16,
         depth: u8,
@@ -206,6 +266,10 @@ impl TT {
     ) {
         let old_entry = self.get_unchecked(key);
         let old = old_entry.read_unchecked();
+
+        // Always replace if the position is either older, different from the input, exact, or has a higher depth
+        // Example: a Depth 10 search might reach the same position of a Depth 8 search but it would have a higher depth value,
+        // so this replacement scheme prefers entries with higher depth
 
         if self.age != old.age || key != old.key || bound == TTBound::Exact || depth > old.depth {
             let new_best_move = if key == old.key && !best_move.is_valid() {
@@ -233,6 +297,8 @@ impl TT {
             .count()
     }
 
+    // --- Age methods need &mut self ---
+    // These must be called when exclusive access is guaranteed (e.g., main thread, pool idle)
     pub fn increment_age(&mut self) {
         self.age = (self.age + 1) & TTEntry::AGE_MASK as u8;
     }
@@ -252,7 +318,7 @@ impl ThreadPool {
 
         let nums_threads = self.size();
 
-        let chunk_size = no_of_entries / nums_threads;
+        let chunk_size = no_of_entries / nums_threads; // Floor division
 
         std::thread::scope(|s| {
             for i in 0..nums_threads {
@@ -276,9 +342,10 @@ impl ThreadPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::eval::Eval;
+    use crate::eval::Eval; // Make sure Eval is in scope
     use chess::{Move, MoveFlag, Square};
 
+    // Helper to create a default TTEntry for testing
     fn create_test_entry(
         key: u64,
         age: u8,
@@ -290,8 +357,8 @@ mod tests {
     ) -> TTEntry {
         TTEntry {
             key,
-            age: age & TTEntry::AGE_MASK as u8,
-            depth: depth & (TTEntry::DEPTH_MASK >> 7) as u8,
+            age: age & TTEntry::AGE_MASK as u8, // Ensure age fits in 7 bits
+            depth: depth & (TTEntry::DEPTH_MASK >> 7) as u8, // Ensure depth fits in 7 bits
             bound,
             best_move,
             eval,
@@ -322,10 +389,11 @@ mod tests {
         assert_eq!(entry.eval, unpacked_entry.eval, "Eval mismatch");
         assert_eq!(entry.value, unpacked_entry.value, "Value mismatch");
 
+        // Test edge cases for age/depth
         let entry_max = create_test_entry(
             0xAAAAAAAAAAAAAAAA,
-            127,
-            127,
+            127, // Max 7-bit value
+            127, // Max 7-bit value
             TTBound::Upper,
             Move::NULL,
             Eval(-30000),
@@ -353,21 +421,26 @@ mod tests {
             Eval(50),
         );
 
+        // Write entry1
         packed_entry.write(entry1);
 
+        // Read back with correct key
         let read_entry1 = packed_entry
             .read(entry1.key)
             .expect("Failed to read entry1");
         assert_eq!(entry1, read_entry1, "Read entry mismatch");
 
+        // Read with incorrect key
         let read_wrong_key = packed_entry.read(0xDEADBEEFDEADBEEF);
         assert!(
             read_wrong_key.is_none(),
             "Reading with wrong key should return None"
         );
 
+        // Read unchecked
         let read_unchecked_entry = packed_entry.read_unchecked();
-
+        // Note: read_unchecked doesn't verify the key, so it might return garbage if the key doesn't match.
+        // We only check if it *could* be the correct entry based on data.
         assert_eq!(entry1.age, read_unchecked_entry.age);
         assert_eq!(entry1.depth, read_unchecked_entry.depth);
         assert_eq!(entry1.bound, read_unchecked_entry.bound);
@@ -375,6 +448,7 @@ mod tests {
         assert_eq!(entry1.eval, read_unchecked_entry.eval);
         assert_eq!(entry1.value, read_unchecked_entry.value);
 
+        // Clear and read
         packed_entry.clear();
         let read_after_clear = packed_entry.read(entry1.key);
         assert!(
@@ -382,14 +456,14 @@ mod tests {
             "Reading after clear should return None"
         );
         let read_unchecked_after_clear = packed_entry.read_unchecked();
-        assert_eq!(read_unchecked_after_clear.key, 0);
-        assert_eq!(read_unchecked_after_clear.age, 0);
+        assert_eq!(read_unchecked_after_clear.key, 0); // Key should be 0 after clear
+        assert_eq!(read_unchecked_after_clear.age, 0); // Data fields should be 0
     }
 
     #[test]
     fn test_tt_get_write_basic() {
         let mut tt = TT::default();
-        tt.resize(1);
+        tt.resize(1); // Use a small table for easier testing
         tt.age = 10;
 
         let key = 0x1111;
@@ -403,6 +477,7 @@ mod tests {
             Eval(30),
         );
 
+        // Write and get
         tt.write(
             key,
             entry.bound,
@@ -419,21 +494,22 @@ mod tests {
         assert_eq!(entry.depth, retrieved.depth);
         assert_eq!(entry.bound, retrieved.bound);
         assert_eq!(entry.best_move, retrieved.best_move);
-
+        // Note: Eval is stored adjusted by ply, value is stored directly
         assert_eq!(entry.eval.to_tt(0), retrieved.eval);
         assert_eq!(entry.value, retrieved.value);
 
+        // Get non-existent key
         assert!(tt.get(0x2222).is_none());
     }
 
     #[test]
     fn test_tt_replacement_scheme() {
         let mut tt = TT::default();
-        tt.resize(1);
+        tt.resize(1); // Force collisions
         tt.age = 5;
 
         let key1 = 0xAAAA;
-        let key2 = 0xBBBB;
+        let key2 = 0xBBBB; // Different key, same index
 
         let entry_old = create_test_entry(
             key1,
@@ -454,6 +530,7 @@ mod tests {
             entry_old.value,
         );
 
+        // 1. Replace due to different age
         tt.age = 6;
         let entry_new_age = create_test_entry(
             key1,
@@ -463,7 +540,7 @@ mod tests {
             Move::new(Square::G8, Square::F6, MoveFlag::QuietMove),
             Eval(5),
             Eval(5),
-        );
+        ); // Shallower depth
         tt.write(
             key1,
             entry_new_age.bound,
@@ -480,6 +557,7 @@ mod tests {
         );
         assert_eq!(tt.get(key1).unwrap().age, tt.age, "Age should be updated");
 
+        // Reset age for next tests
         tt.age = 5;
         tt.write(
             key1,
@@ -489,8 +567,9 @@ mod tests {
             entry_old.best_move,
             entry_old.eval,
             entry_old.value,
-        );
+        ); // Put old entry back
 
+        // 2. Replace due to different key (collision)
         let entry_collision = create_test_entry(
             key2,
             tt.age,
@@ -499,7 +578,7 @@ mod tests {
             Move::new(Square::D7, Square::D5, MoveFlag::QuietMove),
             Eval(0),
             Eval(0),
-        );
+        ); // Even shallower
         tt.write(
             key2,
             entry_collision.bound,
@@ -519,6 +598,7 @@ mod tests {
             "Old key should be gone after collision replacement"
         );
 
+        // Put old entry back
         tt.write(
             key1,
             entry_old.bound,
@@ -529,6 +609,7 @@ mod tests {
             entry_old.value,
         );
 
+        // 3. Replace due to new entry being deeper
         let entry_deeper = create_test_entry(
             key1,
             tt.age,
@@ -553,6 +634,7 @@ mod tests {
             "Should replace due to depth"
         );
 
+        // 4. Replace due to old entry being Exact (unusual case)
         let entry_exact = create_test_entry(
             key1,
             tt.age,
@@ -585,7 +667,7 @@ mod tests {
             Move::new(Square::H7, Square::H6, MoveFlag::QuietMove),
             Eval(28),
             Eval(28),
-        );
+        ); // Shallower, not PV, but replacing Exact
         tt.write(
             key1,
             entry_replace_exact.bound,
@@ -606,6 +688,7 @@ mod tests {
             "Depth should be updated after replacing Exact"
         );
 
+        // 5. Do NOT replace if shallower and other conditions not met
         let entry_shallow = create_test_entry(
             key1,
             tt.age,
@@ -630,6 +713,7 @@ mod tests {
             "Should NOT replace with shallower entry"
         );
 
+        // 7. Preserve best move
         let good_move = Move::new(Square::E1, Square::G1, MoveFlag::QuietMove);
         let entry_with_move = create_test_entry(
             key1,
@@ -663,7 +747,7 @@ mod tests {
             Move::NULL,
             Eval(55),
             Eval(55),
-        );
+        ); // Deeper, but no valid move
         tt.write(
             key1,
             entry_overwrite_no_move.bound,
@@ -687,7 +771,7 @@ mod tests {
             Move::new(Square::H1, Square::G1, MoveFlag::QuietMove),
             Eval(60),
             Eval(60),
-        );
+        ); // Deeper, with a valid move
         tt.write(
             key1,
             entry_overwrite_with_move.bound,
@@ -707,13 +791,13 @@ mod tests {
     #[test]
     fn test_tt_age_increment() {
         let mut tt = TT::default();
-        tt.age = 126;
+        tt.age = 126; // Max 7-bit value - 1
         assert_eq!(tt.age, 126);
 
         tt.increment_age();
         assert_eq!(tt.age, 127);
 
-        tt.increment_age();
+        tt.increment_age(); // Should wrap around (127 + 1) & 0x7F = 128 & 0x7F = 0
         assert_eq!(tt.age, 0);
 
         tt.increment_age();
@@ -722,34 +806,41 @@ mod tests {
 
     #[test]
     fn test_eval_mate_score_adjustment() {
-        let mate_in_3 = Eval::mate_in(3);
-        let mated_in_5 = Eval::mated_in(5);
+        let mate_in_3 = Eval::mate_in(3); // MATE - 3
+        let mated_in_5 = Eval::mated_in(5); // -MATE + 5
 
         let ply = 10;
 
-        let stored_mate_in_3 = mate_in_3.to_tt(ply);
-        let stored_mated_in_5 = mated_in_5.to_tt(ply);
+        // Storing mate scores
+        let stored_mate_in_3 = mate_in_3.to_tt(ply); // Should add ply: (MATE - 3) + 10
+        let stored_mated_in_5 = mated_in_5.to_tt(ply); // Should subtract ply: (-MATE + 5) - 10
 
         assert_eq!(stored_mate_in_3, Eval::MATE - Eval(3) + Eval(ply as i16));
         assert_eq!(stored_mated_in_5, -Eval::MATE + Eval(5) - Eval(ply as i16));
 
-        let retrieved_mate_in_3 = stored_mate_in_3.from_tt(ply);
-        let retrieved_mated_in_5 = stored_mated_in_5.from_tt(ply);
+        // Retrieving mate scores
+        let retrieved_mate_in_3 = stored_mate_in_3.from_tt(ply); // Should subtract ply
+        let retrieved_mated_in_5 = stored_mated_in_5.from_tt(ply); // Should add ply
 
         assert_eq!(retrieved_mate_in_3, mate_in_3);
         assert_eq!(retrieved_mated_in_5, mated_in_5);
 
+        // Test non-mate scores
         let normal_eval = Eval(100);
         assert_eq!(normal_eval.to_tt(ply), normal_eval);
         assert_eq!(normal_eval.from_tt(ply), normal_eval);
     }
 
+    // Note: Testing ThreadPool::clear_hash_table requires a ThreadPool instance
+    // and might be better suited for integration tests, but a basic check can be done.
     #[test]
     fn test_tt_clear_basic() {
+        // This test doesn't use ThreadPool directly but simulates the clearing effect.
         let mut tt = TT::default();
-        tt.resize(100);
+        tt.resize(100); // Use a reasonable size
         tt.age = 1;
 
+        // Write some entries
         tt.write(
             0x123456789ABCDEF0,
             TTBound::Exact,
@@ -768,7 +859,7 @@ mod tests {
             Eval(20),
             Eval(20),
         );
-
+        // Calculate index for a key to check specific clearing
         let key3 = 0x10238404385783;
         let index3 = tt.index(key3);
         tt.write(key3, TTBound::Upper, 0, 7, Move::NULL, Eval(30), Eval(30));
@@ -777,6 +868,7 @@ mod tests {
         assert!(tt.get(0x1240283598731485).is_some());
         assert!(tt.get(key3).is_some());
 
+        // Simulate clearing (manually clear the underlying Vec for simplicity)
         for entry in tt.table.iter() {
             entry.clear();
         }

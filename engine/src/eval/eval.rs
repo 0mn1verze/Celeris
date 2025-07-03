@@ -2,11 +2,11 @@ use crate::engine::tunables::*;
 
 use super::Eval;
 use chess::{PieceType, board::Board};
-use nnue::accummulator::Accumulator;
+use nnue::accumulator::Accumulator;
 
 #[rustfmt::skip]
  pub fn evaluate_nnue(board: &Board, nnue: &mut Accumulator) -> Eval {
-      
+     // nnue output
      let mut v = nnue.evaluate(board);
  
      let material_scale = (

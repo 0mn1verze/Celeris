@@ -4,23 +4,26 @@ use super::command::UCICommandError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum EngineOption {
+    /// Command to enable chess960 option
     Chess960(bool),
-
+    /// Command to clear the transposition table.
     ClearHash,
-
+    /// Command to resize the transposition table (value in MB).
     ResizeHash(usize),
-
+    /// Command to change the number of search threads.
     ResizeThreads(usize),
-
+    /// Temporary option for tunables.
     #[cfg(feature = "tune")]
     SetTunable(String, String),
 }
 
 impl EngineOption {
+    /// Helper to parse the value part of a "setoption" command into a specific type.
     fn parse_value<T: FromStr>(
         option_name: &str,
         tokens: SplitWhitespace,
     ) -> Result<T, UCICommandError> {
+        // Collect the rest as value (values can also have spaces, though less common for standard UCI options)
         let value_str = tokens.collect::<Vec<&str>>().join(" ");
 
         if value_str.is_empty() {

@@ -84,10 +84,11 @@ pub fn run_bench(depth: usize) {
     let mut total_time = 0;
 
     tt.reset_age();
-    thread.clear_hash_table(&tt);
 
     for (i, fen) in FENS.iter().enumerate() {
         let mut board = Board::from_fen(fen).unwrap();
+
+        thread.clear_hash_table(&tt);
 
         let start = Instant::now();
 

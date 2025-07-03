@@ -13,8 +13,10 @@ pub struct MovePicker<const TACTICAL: bool> {
 
     tt_move: Move,
     killers: [Move; 2],
+    // list: ScoredMoveList,
 
-    pub move_list: MoveList,
+    // Scored move list items
+    move_list: MoveList,
     scores: [Eval; 256],
     index: usize,
 
@@ -30,10 +32,12 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
             tt_move = Move::NONE;
         }
 
+        // A valid killer must be legal and a non capture
         if !killers[0].is_valid() || !board.is_legal(killers[0]) {
             killers[0] = Move::NONE;
         }
 
+        // A valid killer must be legal and a non capture
         if !killers[1].is_valid() || !board.is_legal(killers[1]) {
             killers[1] = Move::NONE;
         }
@@ -71,7 +75,6 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
             };
 
             if move_.is_promotion() {
-                // Safety: Justified as the move is a promotion.
                 score += unsafe { Eval(10000 + (move_.promotion_pt() as i16) * 1000) };
             }
 
@@ -133,7 +136,7 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
     where
         F: Fn(Move) -> bool,
     {
-        let slice_len = end.saturating_sub(self.index);
+        let slice_len = end.saturating_sub(self.index); // How many items to potentially look at
 
         let found = self
             .move_list
@@ -141,11 +144,12 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
             .skip(self.index)
             .take(slice_len)
             .enumerate()
-            .find(|&(_i, &m)| pred(m) && m != self.tt_move);
+            .find(|&(_i, &m)| pred(m) && m != self.tt_move); // Find the first suitable move
 
+        // Update the main index based on whether a move was found
         self.index = found.map_or(end, |(i, _m)| self.index + i + 1);
 
-        found.map(|(_, m)| *m)
+        found.map(|(_, m)| *m) // Return the move itself if found
     }
 
     pub fn next(&mut self, board: &Board, stats: &SearchStats) -> Option<Move> {

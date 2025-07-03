@@ -3,7 +3,7 @@
     feature(stdarch_x86_avx512)
 )]
 
-pub mod accummulator;
+pub mod accumulator;
 pub mod flatten;
 pub mod params;
 pub mod utils;

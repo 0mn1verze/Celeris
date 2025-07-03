@@ -92,6 +92,7 @@ impl Clock {
             (btime, binc.unwrap_or(0))
         };
 
+        // When below overhead, set time to 0
         let adjusted_time = time - Self::OVERHEAD.min(time);
         let adjusted_inc = if adjusted_time < Self::OVERHEAD {
             0
@@ -118,6 +119,8 @@ impl Clock {
     ) -> (Duration, Duration) {
         let (time, inc) = Self::get_time_and_increment(stm, wtime, btime, winc, binc);
         let (opt, max) = if let Some(moves) = movestogo {
+            // Formula from Crippa by Svart
+            // https://github.com/crippa1337/svart/blob/master/engine/src/uci/timeman.rs
             let scale = 0.7 / (moves.min(50) as f64);
             let five = 0.5 * time as f64;
             let opt_time = (scale * time as f64).min(five);
@@ -148,6 +151,7 @@ impl Clock {
             return false;
         }
 
+        // at least depth 1
         if depth <= MIN_DEPTH {
             return true;
         }

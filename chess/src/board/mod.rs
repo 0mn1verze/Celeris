@@ -320,13 +320,13 @@ impl Board {
     /// According to FIDE rules, if the 50-move counter is >= 100, it's a draw,
     /// unless the move that reached this count was checkmate.
     #[inline]
-    pub fn is_draw(&self) -> bool {
+    pub fn is_draw(&self, ply_from_null: u16) -> bool {
         // Avoid returning true when checkmate by ignoring positions that are in check, delegating them to later logic
         if self.state.fifty_move > 99 && !self.in_check() {
             return true;
         }
         // Check for threefold repetition.
-        return self.state.repetitions < 0;
+        return self.state.repetitions != 0 && self.state.repetitions < ply_from_null as i8;
     }
 
     /// Checks if a file is semi-open for the given color (no pawns of that color on the file).
