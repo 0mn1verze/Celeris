@@ -12,7 +12,7 @@ pub mod constants {
     // Default configuration values.
     pub const THREADS: usize = 1;
     pub const DEBUG: bool = true;
-    pub const TT_SIZE: usize = 64;
+    pub const TT_SIZE: usize = 32;
 
     // Search-related constants.
     pub const MAX_DEPTH: usize = MAX_MOVES;
