@@ -91,11 +91,11 @@ pub fn run_bench(depth: usize) {
 
         let start = Instant::now();
 
-        thread.start_search(TimeControl::FixedDepth(depth), &tt, &mut board);
+        thread.start_search(TimeControl::FixedDepth(depth), &tt, &board);
 
         total_time += start.elapsed().as_micros();
 
-        println!("FEN: {i}");
+        // println!("FEN: {i}");
         total_nodes += thread.nodes();
     }
 
@@ -112,8 +112,6 @@ pub fn run_bench(depth: usize) {
         "{total_nodes} nodes {} nps",
         total_nodes * 1_000_000 / (total_time as u64).max(1)
     );
-    println!(
-        "Average branching factor estimate: {:.2}",
-        avg_branch_factor
-    );
+
+    println!("Average branching factor estimate: {avg_branch_factor:.2}");
 }

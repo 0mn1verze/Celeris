@@ -219,13 +219,7 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
                     self.next(board, stats)
                 }
             }
-            MoveStage::BadCaptures => {
-                if let Some(move_) = self.next_best(self.quiet_start, cap_pred) {
-                    Some(move_)
-                } else {
-                    None
-                }
-            }
+            MoveStage::BadCaptures => self.next_best(self.quiet_start, cap_pred),
         }
     }
 }

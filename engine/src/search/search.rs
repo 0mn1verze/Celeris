@@ -12,6 +12,7 @@ use crate::{
     eval::{Eval, evaluate_nnue},
     movepick::MovePicker,
     search::PVLine,
+    tunables::*,
 };
 
 use super::{
@@ -287,14 +288,12 @@ impl SearchWorker {
             && beta >= -Eval::MATE_BOUND
             && (!tt_hit || tt_bound == TTBound::Lower || tt_value >= beta)
         {
-            let r = ((eval.0 - beta.0) as usize / 200).min(3) + depth / 5 + 4;
-
-            let reduced_depth = depth.max(r + 1) - r;
+            let r = (nmp_min() + depth / nmp_div()).min(depth);
 
             self.make_null_move(tt);
 
             let value =
-                -self.negamax::<NonPV>(tt, &mut child_pv, -beta, -beta + Eval(1), reduced_depth);
+                -self.negamax::<NonPV>(tt, &mut child_pv, -beta, -beta + Eval(1), depth - r);
 
             self.undo_null_move();
 
@@ -319,10 +318,7 @@ impl SearchWorker {
         let mut move_picker = MovePicker::<false>::new(&self.board, tt_move, killers);
 
         while let Some(move_) = move_picker.next(&self.board, &self.stats) {
-
             move_count += 1;
-
-            self.make_move(tt, move_);
 
             let start_nodes = self.nodes;
 
@@ -332,18 +328,26 @@ impl SearchWorker {
 
             let mut value = alpha;
 
-            let full_search = if !NT::PV && depth >= 2 && move_count > 1 && !is_capture {
-                let r = 1 + ((move_count > 6) as usize) * depth / 3;
+            self.make_move(tt, move_);
 
-                let reduced_depth = new_depth.max(r + 1) - r;
+            let full_search = if depth >= lmr_min_depth()
+                && move_count >= lmr_min_moves() + NT::PV as usize
+            {
+                // Late move reductions.
+                let mut r = late_move_reduction(depth, move_count);
 
-                value = -self.negamax::<NonPV>(
-                    tt,
-                    &mut child_pv,
-                    -alpha - Eval(1),
-                    -alpha,
-                    reduced_depth,
-                );
+                // Increase reductions for moves we think might be bad
+                r += !NT::PV as usize;
+
+                // Decrease reductions for moves we think might be good
+                r -= in_check as usize;
+
+                // We don't want to extend or go into qsearch.
+                // Since we have checked for qsearch, depth is guaranteed to be >= 1.
+                r = r.clamp(1, depth - 1);
+
+                value =
+                    -self.negamax::<NonPV>(tt, &mut child_pv, -alpha - Eval(1), -alpha, depth - r);
 
                 value > alpha
             } else {
@@ -629,8 +633,10 @@ impl SearchWorker {
     }
 
     fn improving(&self) -> bool {
-        if self.ply >= 2 {
-            self.ss().eval > self.ss_at(2).eval
+        if self.ply >= 2 && self.stack[self.ply as usize - 2].eval != -Eval::INFINITY {
+            self.stack[self.ply as usize].eval > self.stack[self.ply as usize - 2].eval
+        } else if self.ply >= 4 && self.stack[self.ply as usize - 4].eval != -Eval::INFINITY {
+            self.stack[self.ply as usize].eval > self.stack[self.ply as usize - 4].eval
         } else {
             false
         }
@@ -638,9 +644,15 @@ impl SearchWorker {
 
     fn opp_worsening(&self) -> bool {
         if self.ply >= 1 {
-            self.ss().eval > -self.ss_at(1).eval
+            self.stack[self.ply as usize].eval > -self.stack[self.ply as usize - 1].eval
         } else {
             false
         }
     }
+}
+
+fn late_move_reduction(depth: usize, move_count: usize) -> usize {
+    let a = (lmr_a() as f32) / 100.0;
+    let b = (lmr_b() as f32) / 100.0;
+    (a + (depth as f32).ln() * (move_count as f32).ln() / b) as usize
 }
