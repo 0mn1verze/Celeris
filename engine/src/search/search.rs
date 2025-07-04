@@ -12,7 +12,7 @@ use crate::{
     eval::{Eval, evaluate_nnue},
     movepick::MovePicker,
     search::PVLine,
-    tunables::{lmr_base, lmr_mult},
+    tunables::*,
 };
 
 use super::{
@@ -304,14 +304,12 @@ impl SearchWorker {
             && beta >= -Eval::MATE_BOUND
             && (!tt_hit || tt_bound == TTBound::Lower || tt_value >= beta)
         {
-            let r = ((eval.0 - beta.0) as usize / 200).min(3) + depth / 5 + 4;
-
-            let reduced_depth = depth.max(r + 1) - r;
+            let r = (nmp_min() + depth / nmp_div()).min(depth);
 
             self.make_null_move(tt);
 
             let value =
-                -self.negamax::<NonPV>(tt, &mut child_pv, -beta, -beta + Eval(1), reduced_depth);
+                -self.negamax::<NonPV>(tt, &mut child_pv, -beta, -beta + Eval(1), depth - r);
 
             self.undo_null_move();
 

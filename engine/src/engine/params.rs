@@ -26,6 +26,10 @@ init_tunables! {
     lmr_base: i32 = 768, 500, 2000, 100;
     lmr_mult: i32 = 2048, 1500, 4000, 100;
 
+    // Null Move Pruning
+    nmp_min: usize = 4, 2, 6, 1;
+    nmp_div: usize = 4, 2, 6, 1;
+
     // Piece values
     pawn_val:   i32 = 82, 60, 140, 5;
     knight_val: i32 = 337, 250, 370, 5;
