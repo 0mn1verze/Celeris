@@ -3,7 +3,7 @@ use crate::init_tunables;
 /// Defines constants used by the engine controller and potentially other parts.
 pub mod constants {
     // Import necessary types for constants.
-    use chess::board::MAX_MOVES;
+    use chess::{PieceType, board::MAX_MOVES};
 
     pub const NAME: &str = "Celeris";
     pub const VERSION: &str = "0.0.1";
@@ -21,6 +21,8 @@ pub mod constants {
 
     // Moveordering-related constants
     pub const MAX_MAIN_HISTORY: i16 = 16384;
+    /// The value of the victim we are capturing
+    pub const MVV: [i16; PieceType::NUM] = [0, 2400, 2400, 4800, 9600, 0];
 }
 
 init_tunables! {
