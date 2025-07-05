@@ -161,9 +161,13 @@ impl SearchWorker {
 
         let bonus = (depth * depth) as i16;
 
-        self.stats
-            .main_history
-            .update(&self.board, best_move, bonus);
+        if !best_move.is_capture() {
+            self.stats
+                .main_history
+                .update(&self.board, best_move, bonus);
+        } else {
+            self.stats.cap_history.update(&self.board, best_move, bonus);
+        }
     }
 
     pub(super) fn static_eval(&mut self, in_check: bool, tt_entry: Option<TTEntry>) -> Eval {
