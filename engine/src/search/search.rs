@@ -353,23 +353,26 @@ impl SearchWorker {
             let mut value = alpha;
 
             // Late Move Reduction, search moves that are sufficiently far from the terminal nodes and are not tactical using a reduced depth zero window search to see if it is promising or not.
-            let full_search = if !NT::PV && depth >= 2 && move_count > 1 && !is_capture {
+            let full_search = if depth >= 2 && move_count > 2 + NT::PV as usize {
                 // Calculate dynamic depth reduction
-                let r = self.lmr_base_reduction(depth, move_count);
+                let mut r = self.lmr_base_reduction(depth, move_count);
 
-                let reduced_depth = new_depth.max(r + 1) - r;
+                // Increase reductions for moves we think might be bad
+                r += !NT::PV as usize;
 
-                value = -self.negamax::<NonPV>(
-                    tt,
-                    &mut child_pv,
-                    -alpha - Eval(1),
-                    -alpha,
-                    reduced_depth,
-                );
+                // Decrease reductions for moves we think might be good
+                r -= in_check as usize;
 
-                value > alpha
+                // We don't want to extend or go into qsearch.
+                // Since we have checked for qsearch, depth is guaranteed to be >= 1.
+                r = r.clamp(1, depth - 1);
+
+                value =
+                    -self.negamax::<NonPV>(tt, &mut child_pv, -alpha - Eval(1), -alpha, depth - r);
+
+                value > alpha && r > 1
             } else {
-                !NT::PV || move_count > 1 || is_capture
+                !NT::PV || move_count > 1
             };
 
             // We do a zero window full depth search if the reduced depth search revealed a potentially better move,
