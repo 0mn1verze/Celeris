@@ -177,3 +177,32 @@ impl MainHistory {
         )
     }
 }
+
+/******************************************\
+|==========================================|
+|              Capture History             |
+|==========================================|
+\******************************************/
+
+define_history!(
+    CaptureHistory,
+    MAX_MAIN_HISTORY,
+    [Colour::NUM, Piece::NUM, Square::NUM, Piece::NUM],
+    [colour, moved_piece, square, captured_piece]
+);
+
+impl CaptureHistory {
+    /// Helper function to get the indices for the history table.
+    #[inline(always)]
+    fn get_indices(board: &Board, move_: Move) -> (usize, usize, usize, usize) {
+        // Safety: Assumes the 'from' square is occupied, which should be true for valid moves.
+        let moved_piece = unsafe { board.on_unchecked(move_.from()) };
+        let captured_piece = unsafe { board.on_unchecked(move_.to()) };
+        (
+            board.stm().index(),
+            moved_piece.index(),
+            move_.to().index(),
+            captured_piece.index(),
+        )
+    }
+}
