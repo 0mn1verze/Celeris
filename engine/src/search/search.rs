@@ -359,16 +359,24 @@ impl SearchWorker {
 
                 // Increase reductions for moves we think might be bad
                 r += !NT::PV as usize;
+                r += !improving as usize;
+                r += tt_capture as usize;
 
                 // Decrease reductions for moves we think might be good
                 r -= in_check as usize;
+                r -= self.board.in_check() as usize;
 
                 // We don't want to extend or go into qsearch.
                 // Since we have checked for qsearch, depth is guaranteed to be >= 1.
                 r = r.clamp(1, depth - 1);
 
-                value =
-                    -self.negamax::<NonPV>(tt, &mut child_pv, -alpha - Eval(1), -alpha, depth - r);
+                value = -self.negamax::<NonPV>(
+                    tt,
+                    &mut child_pv,
+                    -alpha - Eval(1),
+                    -alpha,
+                    new_depth - r,
+                );
 
                 value > alpha && r > 1
             } else {
