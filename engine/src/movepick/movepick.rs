@@ -24,6 +24,10 @@ pub struct MovePicker<const TACTICAL: bool> {
     bad_cap_start: usize,
 }
 
+// fn captured_value(captured: PieceType) {
+//     MVV[captured.index()]
+// }
+
 impl<const TACTICAL: bool> MovePicker<TACTICAL> {
     pub fn new(board: &Board, mut tt_move: Move, mut killers: [Move; 2]) -> Self {
         let in_check = board.in_check();

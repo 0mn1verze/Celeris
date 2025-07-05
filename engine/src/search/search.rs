@@ -169,7 +169,7 @@ impl SearchWorker {
             let mut value = alpha;
 
             // Late Move Reduction, search moves that are sufficiently far from the terminal nodes and are not tactical using a reduced depth zero window search to see if it is promising or not.
-            let full_search = if depth >= 2 && move_count > 2 + NT::PV as usize {
+            let full_search = if depth >= 2 && move_count > 3 + NT::PV as usize {
                 // Calculate dynamic depth reduction
                 let mut r = lmr_base_reduction(depth, move_count);
 
@@ -265,30 +265,28 @@ impl SearchWorker {
                 Eval::DRAW
             };
             // If there is a new best move, and it is not a capture, update the killer move and history move table
-        } else if best_move.is_valid() && !best_move.is_capture() {
+        } else if best_value >= beta {
             self.update_search_stats(best_move, depth);
         }
 
-        if !NT::ROOT {
-            // Write to TT, save static eval
-            let bound = if best_value >= beta {
-                TTBound::Lower
-            } else if NT::PV && best_move.is_valid() {
-                TTBound::Exact
-            } else {
-                TTBound::Upper
-            };
+        // Write to TT, save static eval
+        let bound = if best_value >= beta {
+            TTBound::Lower
+        } else if NT::PV && best_move.is_valid() {
+            TTBound::Exact
+        } else {
+            TTBound::Upper
+        };
 
-            tt.write(
-                self.board.key(),
-                bound,
-                self.ply,
-                depth as u8,
-                best_move,
-                eval,
-                best_value,
-            );
-        }
+        tt.write(
+            self.board.key(),
+            bound,
+            self.ply,
+            depth as u8,
+            best_move,
+            eval,
+            best_value,
+        );
 
         best_value
     }

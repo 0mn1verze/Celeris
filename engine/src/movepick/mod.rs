@@ -2,7 +2,7 @@ mod history;
 mod movepick;
 mod see;
 
-pub use history::{History, KillerEntry, MainHistory};
+pub use history::{CaptureHistory, History, KillerEntry, MainHistory};
 pub use movepick::MovePicker;
 pub use see::see;
 

@@ -12,7 +12,7 @@ pub use pv::PVLine;
 pub use tt::TT;
 
 use crate::{
-    Eval, KillerEntry, MainHistory,
+    CaptureHistory, Eval, KillerEntry, MainHistory,
     constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
 };
 use chess::{Move, Piece, board::Board};
@@ -32,6 +32,7 @@ pub(crate) struct SearchStackEntry {
 #[derive(Debug, Clone, Default)]
 pub struct SearchStats {
     pub main_history: MainHistory,
+    pub cap_history: CaptureHistory,
 }
 
 #[derive(Debug, Clone)]
