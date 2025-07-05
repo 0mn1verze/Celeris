@@ -1,9 +1,9 @@
 use chess::{
-    Move, MoveFlag,
+    Move, MoveFlag, PieceType,
     board::{Board, CaptureGen, MoveList, QuietGen},
 };
 
-use crate::{eval::Eval, search::SearchStats};
+use crate::{constants::MVV, eval::Eval, search::SearchStats};
 
 use super::{History, MoveStage, see::see};
 
@@ -24,9 +24,9 @@ pub struct MovePicker<const TACTICAL: bool> {
     bad_cap_start: usize,
 }
 
-// fn captured_value(captured: PieceType) {
-//     MVV[captured.index()]
-// }
+fn captured_value(captured: PieceType) -> Eval {
+    Eval(MVV[captured.index()])
+}
 
 impl<const TACTICAL: bool> MovePicker<TACTICAL> {
     pub fn new(board: &Board, mut tt_move: Move, mut killers: [Move; 2]) -> Self {
@@ -63,23 +63,21 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
         self.skip_quiets = true;
     }
 
-    fn score_captures(&mut self, board: &Board, _stats: &SearchStats) {
+    fn score_captures(&mut self, board: &Board, stats: &SearchStats) {
         let mut next_good_cap = 0;
 
         for i in 0..self.move_list.len() {
             let move_ = self.move_list[i];
 
-            let mut score = match move_.flag() {
-                MoveFlag::EPCapture => Eval(105),
-                _ => {
-                    let attacker = unsafe { board.on(move_.from()).unwrap_unchecked() };
-                    let captured = unsafe { board.on(move_.to()).unwrap_unchecked() };
-                    Eval(100 + (captured.pt() as i16) * 100 + 5 - (attacker.pt() as i16))
-                }
+            let captured = match move_.flag() {
+                MoveFlag::EPCapture => PieceType::Pawn,
+                _ => unsafe { board.on_unchecked(move_.to()).pt() },
             };
 
+            let mut score = captured_value(captured) + stats.cap_history.get(board, move_);
+
             if move_.is_promotion() {
-                score += unsafe { Eval(10000 + (move_.promotion_pt() as i16) * 1000) };
+                score += captured_value(unsafe { move_.promotion_pt() });
             }
 
             self.scores[i] = score;
