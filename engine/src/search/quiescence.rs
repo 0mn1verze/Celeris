@@ -5,7 +5,7 @@ use crate::{SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
 
 impl SearchWorker {
-    fn quiescence<NT: NodeType>(
+    pub(super) fn quiescence<NT: NodeType>(
         &mut self,
         tt: &TT,
         pv: &mut PVLine,

@@ -1,6 +1,7 @@
 mod clock;
 mod helper;
 mod pv;
+mod quiescence;
 mod search;
 mod tt;
 mod worker;
