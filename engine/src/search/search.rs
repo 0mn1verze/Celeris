@@ -269,24 +269,26 @@ impl SearchWorker {
             self.update_search_stats(best_move, depth);
         }
 
-        // Write to TT, save static eval
-        let bound = if best_value >= beta {
-            TTBound::Lower
-        } else if NT::PV && best_move.is_valid() {
-            TTBound::Exact
-        } else {
-            TTBound::Upper
-        };
+        if !NT::ROOT {
+            // Write to TT, save static eval
+            let bound = if best_value >= beta {
+                TTBound::Lower
+            } else if NT::PV && best_move.is_valid() {
+                TTBound::Exact
+            } else {
+                TTBound::Upper
+            };
 
-        tt.write(
-            self.board.key(),
-            bound,
-            self.ply,
-            depth as u8,
-            best_move,
-            eval,
-            best_value,
-        );
+            tt.write(
+                self.board.key(),
+                bound,
+                self.ply,
+                depth as u8,
+                best_move,
+                eval,
+                best_value,
+            );
+        }
 
         best_value
     }
