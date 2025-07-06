@@ -18,6 +18,9 @@ pub mod constants {
     pub const MAX_DEPTH: usize = MAX_MOVES;
     pub const MIN_DEPTH: usize = 4;
     pub const SEARCH_STACK_OFFSET: usize = 2;
+
+    // Moveordering-related constants
+    pub const MAX_MAIN_HISTORY: i16 = 16384;
 }
 
 init_tunables! {

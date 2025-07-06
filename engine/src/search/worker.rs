@@ -3,22 +3,17 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64},
 };
 
-use chess::{Move, Piece, board::Board};
+use chess::{Move, board::Board};
 use nnue::accumulator::Accumulator;
 
 use crate::{
-    History, KillerEntry, MainHistory, SearchStackEntry, SearchStats, SearchWorker,
+    History, SearchStackEntry, SearchStats, SearchWorker,
     constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
     eval::{Eval, evaluate_nnue},
     search::PVLine,
-    tunables::*,
 };
 
-use super::{
-    Clock, NodeType, NonPV, Root, TT,
-    helper::*,
-    tt::{TTBound, TTEntry},
-};
+use super::{Clock, TT, helper::*, tt::TTEntry};
 
 impl SearchWorker {
     pub fn new(thread_id: usize, stop: Arc<AtomicBool>, nodes: Arc<AtomicU64>) -> Self {
