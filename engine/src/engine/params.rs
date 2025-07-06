@@ -21,6 +21,7 @@ pub mod constants {
 
     // Moveordering-related constants
     pub const MAX_MAIN_HISTORY: i16 = 16384;
+    pub const MOVE_BUFFER_MAX: usize = 32;
     /// The value of the victim we are capturing
     pub const MVV: [i16; PieceType::NUM] = [0, 2400, 2400, 4800, 9600, 0];
 }

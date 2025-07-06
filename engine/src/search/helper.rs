@@ -28,3 +28,11 @@ pub(crate) fn can_use_tt_value(tt_bound: TTBound, tt_value: Eval, alpha: Eval, b
         _ => false,
     }
 }
+
+pub(crate) fn calculate_bonus(depth: usize) -> i16 {
+    if depth > 13 {
+        (16 * depth * depth + 128 * (depth - 1).max(0)) as i16
+    } else {
+        32
+    }
+}

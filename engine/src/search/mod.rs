@@ -31,8 +31,8 @@ pub(crate) struct SearchStackEntry {
 
 #[derive(Debug, Clone, Default)]
 pub struct SearchStats {
-    pub main_history: MainHistory,
-    pub cap_history: CaptureHistory,
+    pub ht: MainHistory,
+    pub cht: CaptureHistory,
 }
 
 #[derive(Debug, Clone)]

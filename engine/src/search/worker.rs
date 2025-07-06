@@ -7,7 +7,7 @@ use chess::{Move, board::Board};
 use nnue::accumulator::Accumulator;
 
 use crate::{
-    History, SearchStackEntry, SearchStats, SearchWorker,
+    History, MoveBuffer, SearchStackEntry, SearchStats, SearchWorker,
     constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
     eval::{Eval, evaluate_nnue},
     search::PVLine,
@@ -40,7 +40,8 @@ impl SearchWorker {
     }
 
     pub fn reset(&mut self) {
-        self.stats.main_history.clear();
+        self.stats.ht.clear();
+        self.stats.cht.clear();
     }
 
     pub fn prepare_search(&mut self) {
@@ -156,16 +157,28 @@ impl SearchWorker {
         self.ply_from_null = self.ss().ply_from_null;
     }
 
-    pub(super) fn update_search_stats(&mut self, best_move: Move, depth: usize) {
-        let bonus = (depth * depth) as i16;
+    pub(super) fn update_search_stats(
+        &mut self,
+        best_move: Move,
+        depth: usize,
+        caps_tried: &MoveBuffer,
+        quiets_tried: &MoveBuffer,
+    ) {
+        let bonus = calculate_bonus(depth);
 
         if !best_move.is_capture() {
             self.ss_mut().killers.update(best_move);
-            self.stats
-                .main_history
-                .update(&self.board, best_move, bonus);
+            self.stats.ht.update(&self.board, best_move, bonus);
+
+            for &move_ in quiets_tried {
+                self.stats.ht.update(&self.board, move_, -bonus);
+            }
         } else {
-            self.stats.cap_history.update(&self.board, best_move, bonus);
+            self.stats.cht.update(&self.board, best_move, bonus);
+        }
+
+        for &move_ in caps_tried {
+            self.stats.cht.update(&self.board, move_, -bonus);
         }
     }
 

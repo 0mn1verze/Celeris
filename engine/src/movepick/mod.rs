@@ -1,8 +1,10 @@
 mod history;
+mod move_buffer;
 mod movepick;
 mod see;
 
 pub use history::{CaptureHistory, History, KillerEntry, MainHistory};
+pub(crate) use move_buffer::MoveBuffer;
 pub use movepick::MovePicker;
 pub use see::see;
 

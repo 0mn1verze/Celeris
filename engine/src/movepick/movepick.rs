@@ -74,7 +74,7 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
                 _ => unsafe { board.on_unchecked(move_.to()).pt() },
             };
 
-            let mut score = captured_value(captured) + stats.cap_history.get(board, move_);
+            let mut score = captured_value(captured) + stats.cht.get(board, move_);
 
             if move_.is_promotion() {
                 score += captured_value(unsafe { move_.promotion_pt() });
@@ -96,7 +96,7 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
         for i in self.quiet_start..self.move_list.len() {
             let move_ = self.move_list[i];
 
-            self.scores[i] = stats.main_history.get(board, move_);
+            self.scores[i] = stats.ht.get(board, move_);
         }
     }
 

@@ -1,6 +1,9 @@
 use chess::Move;
 
-use crate::{SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker, search::PVLine};
+use crate::{
+    MoveBuffer, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
+    search::PVLine,
+};
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
 
@@ -142,6 +145,10 @@ impl SearchWorker {
         let mut best_value = -Eval::INFINITY;
         let mut best_move = Move::NONE;
 
+        // Set up capture and quiet move list
+        let mut caps_tried = MoveBuffer::default();
+        let mut quiets_tried = MoveBuffer::default();
+
         let mut move_count = 0;
 
         // Clear child killer moves
@@ -164,10 +171,8 @@ impl SearchWorker {
             // let is_promotion = move_.is_promotion();
             // New depth
             let new_depth = depth.max(1) - 1;
-
             // Recursive search
             let mut value = alpha;
-
             // Late Move Reduction, search moves that are sufficiently far from the terminal nodes and are not tactical using a reduced depth zero window search to see if it is promising or not.
             let full_search = if depth >= 2 && move_count > 3 + NT::PV as usize {
                 // Calculate dynamic depth reduction
@@ -250,6 +255,13 @@ impl SearchWorker {
                     }
                 }
             }
+
+            // Add moves tried to the buffer
+            if move_.is_capture() {
+                caps_tried.push(move_);
+            } else {
+                quiets_tried.push(move_);
+            }
         }
 
         // Update search stack move count
@@ -265,8 +277,8 @@ impl SearchWorker {
                 Eval::DRAW
             };
             // If there is a new best move, and it is not a capture, update the killer move and history move table
-        } else if best_value >= beta {
-            self.update_search_stats(best_move, depth);
+        } else if best_move.is_valid() {
+            self.update_search_stats(best_move, depth, &caps_tried, &quiets_tried);
         }
 
         // Write to TT, save static eval
