@@ -157,11 +157,10 @@ impl SearchWorker {
     }
 
     pub(super) fn update_search_stats(&mut self, best_move: Move, depth: usize) {
-        self.ss_mut().killers.update(best_move);
-
         let bonus = (depth * depth) as i16;
 
         if !best_move.is_capture() {
+            self.ss_mut().killers.update(best_move);
             self.stats
                 .main_history
                 .update(&self.board, best_move, bonus);
