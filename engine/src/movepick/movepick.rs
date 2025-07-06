@@ -209,10 +209,15 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
                 }
             }
             MoveStage::GenQuiets => {
-                self.gen_quiets(board, stats);
+                if !self.skip_quiets {
+                    self.gen_quiets(board, stats);
 
-                self.stage = MoveStage::Quiets;
-                self.index = self.quiet_start;
+                    self.stage = MoveStage::Quiets;
+                    self.index = self.quiet_start;
+                } else {
+                    self.stage = MoveStage::BadCaptures;
+                    self.index = self.bad_cap_start;
+                }
                 self.next(board, stats)
             }
             MoveStage::Quiets => {

@@ -156,10 +156,10 @@ impl SearchWorker {
         // Get killer moves
         let killers = self.ss().killers.get();
         // Initialise move picker
-        let mut move_picker = MovePicker::<false>::new(&self.board, tt_move, killers);
+        let mut mp = MovePicker::<false>::new(&self.board, tt_move, killers);
 
         // --- Main Loop ---
-        while let Some(move_) = move_picker.next(&self.board, &self.stats) {
+        while let Some(move_) = mp.next(&self.board, &self.stats) {
             // Update number of moves searched in this node
             move_count += 1;
             // Make move and update ply, node counters, prefetch hash entry, etc...
