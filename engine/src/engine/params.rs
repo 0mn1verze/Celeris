@@ -17,11 +17,12 @@ pub mod constants {
     // Search-related constants.
     pub const MAX_DEPTH: usize = MAX_MOVES;
     pub const MIN_DEPTH: usize = 4;
-    pub const SEARCH_STACK_OFFSET: usize = 2;
+    pub const SEARCH_STACK_OFFSET: usize = 4;
 
     // Moveordering-related constants
     pub const MAX_MAIN_HISTORY: i16 = 16384;
     pub const MOVE_BUFFER_MAX: usize = 32;
+    pub const CONT_HIST_SIZE: usize = 4;
     /// The value of the victim we are capturing
     pub const MVV: [i16; PieceType::NUM] = [0, 2400, 2400, 4800, 9600, 0];
 }

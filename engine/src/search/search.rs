@@ -1,7 +1,10 @@
 use chess::Move;
 
 use crate::{
-    MoveBuffer, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
+    MoveBuffer, SearchStackEntry, SearchWorker,
+    constants::{CONT_HIST_SIZE, MAX_DEPTH},
+    eval::Eval,
+    movepick::MovePicker,
     search::PVLine,
 };
 
@@ -152,14 +155,17 @@ impl SearchWorker {
         let mut move_count = 0;
 
         // Clear child killer moves
-        self.stack[(self.ply + 2) as usize].killers.clear();
+        self.ss_look_ahead(2).killers.clear();
         // Get killer moves
         let killers = self.ss().killers.get();
+
+        // Create search stack buffer for continuation history lookup
+        let ss_buffer = [self.ss_at(1), self.ss_at(2), self.ss_at(3), self.ss_at(4)];
         // Initialise move picker
         let mut mp = MovePicker::<false>::new(&self.board, tt_move, killers);
 
         // --- Main Loop ---
-        while let Some(move_) = mp.next(&self.board, &self.stats) {
+        while let Some(move_) = mp.next(&self.board, &self.stats, &ss_buffer) {
             // Update number of moves searched in this node
             move_count += 1;
             // Make move and update ply, node counters, prefetch hash entry, etc...

@@ -3,11 +3,11 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64},
 };
 
-use chess::{Move, board::Board};
+use chess::{Move, Piece, Square, board::Board};
 use nnue::accumulator::Accumulator;
 
 use crate::{
-    History, MoveBuffer, SearchStackEntry, SearchStats, SearchWorker,
+    HistoryTable, Interface, MoveBuffer, SearchStackEntry, SearchStats, SearchWorker,
     constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
     eval::{Eval, evaluate_nnue},
     search::PVLine,
@@ -42,6 +42,7 @@ impl SearchWorker {
     pub fn reset(&mut self) {
         self.stats.ht.clear();
         self.stats.cht.clear();
+        self.stats.ct.clear();
     }
 
     pub fn prepare_search(&mut self) {
@@ -80,19 +81,27 @@ impl SearchWorker {
     }
 
     pub(super) fn ss(&self) -> SearchStackEntry {
-        self.stack[self.ply as usize]
+        self.stack[self.ply as usize + SEARCH_STACK_OFFSET]
     }
 
     pub(super) fn ss_mut(&mut self) -> &mut SearchStackEntry {
-        &mut self.stack[self.ply as usize]
+        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET]
     }
 
     pub(super) fn ss_at(&self, offset: usize) -> SearchStackEntry {
-        self.stack[self.ply as usize - offset]
+        self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
     }
 
     pub(super) fn ss_at_mut(&mut self, offset: usize) -> &mut SearchStackEntry {
-        &mut self.stack[self.ply as usize - offset]
+        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
+    }
+
+    pub(super) fn ss_look_ahead(&mut self, offset: usize) -> &mut SearchStackEntry {
+        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET + offset]
+    }
+
+    pub(super) fn piece_to_at(&self, offset: usize) -> (Piece, Square) {
+        self.ss_at(offset).piece_to()
     }
 
     pub(super) fn print_info(&self, tt: &TT) {
@@ -157,6 +166,17 @@ impl SearchWorker {
         self.ply_from_null = self.ss().ply_from_null;
     }
 
+    fn update_continuations(&mut self, move_: Move, bonus: i16) {
+        for offset in [1, 2, 3, 4] {
+            let (piece, to) = self.piece_to_at(offset);
+
+            self.stats
+                .ct
+                .probe_mut(piece, to)
+                .update(&self.board, move_, bonus);
+        }
+    }
+
     pub(super) fn update_search_stats(
         &mut self,
         best_move: Move,
@@ -170,8 +190,12 @@ impl SearchWorker {
             self.ss_mut().killers.update(best_move);
             self.stats.ht.update(&self.board, best_move, bonus);
 
+            self.update_continuations(best_move, bonus);
+
             for &move_ in quiets_tried {
                 self.stats.ht.update(&self.board, move_, -bonus);
+
+                self.update_continuations(move_, -bonus);
             }
         } else {
             self.stats.cht.update(&self.board, best_move, bonus);

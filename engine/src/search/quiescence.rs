@@ -1,6 +1,12 @@
 use chess::Move;
 
-use crate::{SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker, search::PVLine};
+use crate::{
+    SearchStackEntry, SearchWorker,
+    constants::{CONT_HIST_SIZE, MAX_DEPTH},
+    eval::Eval,
+    movepick::MovePicker,
+    search::PVLine,
+};
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
 
@@ -73,10 +79,13 @@ impl SearchWorker {
         let mut best_move = Move::NONE;
 
         // --- Generate and Explore Captures Only ---
+
+        let ss_buffer = [SearchStackEntry::default(); CONT_HIST_SIZE];
+
         // The generic parameter 'true' tells MovePicker to skip quiet moves.
         let mut move_picker = MovePicker::<true>::new(&self.board, tt_move, [Move::NONE; 2]);
 
-        while let Some(move_) = move_picker.next(&self.board, &self.stats) {
+        while let Some(move_) = move_picker.next(&self.board, &self.stats, &ss_buffer) {
             // Make the capture
             self.make_move(tt, move_);
             // Recursive call

@@ -12,10 +12,10 @@ pub use pv::PVLine;
 pub use tt::TT;
 
 use crate::{
-    CaptureHistory, Eval, KillerEntry, MainHistory,
+    CaptureHistory, ContinuationTable, Eval, KillerEntry, MainHistory,
     constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
 };
-use chess::{Move, Piece, board::Board};
+use chess::{Move, Piece, Square, board::Board};
 
 #[derive(Debug, Default, Copy, Clone)]
 pub(crate) struct SearchStackEntry {
@@ -33,6 +33,13 @@ pub(crate) struct SearchStackEntry {
 pub struct SearchStats {
     pub ht: MainHistory,
     pub cht: CaptureHistory,
+    pub ct: Box<ContinuationTable>,
+}
+
+impl SearchStackEntry {
+    pub(crate) fn piece_to(&self) -> (Piece, Square) {
+        unsafe { (self.moved.unwrap_unchecked(), self.curr_move.to()) }
+    }
 }
 
 #[derive(Debug, Clone)]
