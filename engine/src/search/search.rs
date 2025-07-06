@@ -160,7 +160,7 @@ impl SearchWorker {
         let killers = self.ss().killers.get();
 
         // Create search stack buffer for continuation history lookup
-        let ss_buffer = [self.ss_at(1), self.ss_at(2), self.ss_at(3), self.ss_at(4)];
+        let ss_buffer = [self.ss_at(1), self.ss_at(2)];
         // Initialise move picker
         let mut mp = MovePicker::<false>::new(&self.board, tt_move, killers);
 
