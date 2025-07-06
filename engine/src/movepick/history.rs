@@ -56,8 +56,7 @@ impl<const MAX: i16> HistoryEntry<MAX> {
     /// - Keeps the history values clamped between MAX and -MAX
     pub fn update(&mut self, bonus: i16) {
         let bonus = bonus.clamp(-MAX, MAX);
-        let product = self.entry.0 as i64 * bonus.abs() as i64 / MAX as i64;
-        self.entry += Eval(bonus - product as i16);
+        self.entry += Eval(bonus - self.entry.0 * bonus.abs() / MAX);
     }
 }
 
