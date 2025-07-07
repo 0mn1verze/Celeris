@@ -8,7 +8,7 @@ use nnue::accumulator::Accumulator;
 
 use crate::{
     HistoryTable, Interface, MoveBuffer, SearchStackEntry, SearchStats, SearchWorker,
-    constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
+    constants::{CONT_HIST_SIZE, MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
     eval::{Eval, evaluate_nnue},
     search::PVLine,
 };
@@ -167,13 +167,15 @@ impl SearchWorker {
     }
 
     fn update_continuations(&mut self, move_: Move, bonus: i16) {
-        for offset in [1, 2, 3, 4] {
-            let (piece, to) = self.piece_to_at(offset);
+        for offset in 0..CONT_HIST_SIZE {
+            if self.ss_at(offset).curr_move.is_valid() {
+                let (piece, to) = self.piece_to_at(offset);
 
-            self.stats
-                .ct
-                .probe_mut(piece, to)
-                .update(&self.board, move_, bonus);
+                self.stats
+                    .ct
+                    .probe_mut(piece, to)
+                    .update(&self.board, move_, bonus);
+            }
         }
     }
 
