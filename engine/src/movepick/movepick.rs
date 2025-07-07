@@ -328,7 +328,7 @@ mod tests {
             MovePicker::<false>::new(&board, Move::NONE, [Move::NONE, Move::NONE]);
         let search_stats = SearchStats::default();
 
-        let ss_buffer = [SearchStackEntry::default(); 4];
+        let ss_buffer = [SearchStackEntry::default(); CONT_HIST_SIZE];
 
         let mut nodes = 0;
 
