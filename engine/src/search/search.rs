@@ -80,6 +80,8 @@ impl SearchWorker {
         mut beta: Eval,
         mut depth: usize,
     ) -> Eval {
+        let us = self.board.stm();
+
         pv.clear();
 
         if self.should_stop_search() {
@@ -192,6 +194,13 @@ impl SearchWorker {
         while let Some(move_) = mp.next(&self.board, &self.stats, &ss_buffer) {
             // Update number of moves searched in this node
             move_count += 1;
+
+            if !NT::PV && best_value.is_valid() && self.board.has_non_pawn_material(us) {
+                if depth <= 8 && move_count >= (3 + depth * depth) / (2 - improving as usize) {
+                    mp.skip_quiets();
+                }
+            }
+
             // Make move and update ply, node counters, prefetch hash entry, etc...
             self.make_move(tt, move_);
             // Remember previous node count
