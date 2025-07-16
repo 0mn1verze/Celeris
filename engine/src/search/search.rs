@@ -42,8 +42,6 @@ impl SearchWorker {
             beta = (self.eval + delta).min(Eval::INFINITY);
         }
 
-        let mut i = 0;
-
         loop {
             let mut pv = PVLine::default();
 
@@ -64,9 +62,7 @@ impl SearchWorker {
                 if search_depth > 1 && eval.abs() <= Eval::MATE_BOUND {
                     search_depth -= 1;
                 }
-                i += 1;
-            }
-            else {
+            } else {
                 self.eval = eval;
                 self.pv = pv;
                 break;
@@ -288,7 +284,6 @@ impl SearchWorker {
                     }
 
                     alpha = value; // Update alpha: Raise the lower bound of our guaranteed score.
-
                 }
             }
 
