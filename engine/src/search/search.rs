@@ -195,8 +195,8 @@ impl SearchWorker {
             // Update number of moves searched in this node
             move_count += 1;
 
-            if !NT::PV && best_value.is_valid() && self.board.has_non_pawn_material(us) {
-                if depth <= 8 && move_count >= (3 + depth * depth) / (2 - improving as usize) {
+            if !NT::ROOT && best_value.is_valid() && self.board.has_non_pawn_material(us) {
+                if depth <= 8 && move_count >= (5 + 2 * depth * depth) / (2 - improving as usize) {
                     mp.skip_quiets();
                 }
             }
