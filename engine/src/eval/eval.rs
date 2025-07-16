@@ -19,5 +19,5 @@ use nnue::accumulator::Accumulator;
  
      v = (v * (nnue_base() + material_scale)) / 1024;
  
-     Eval(v as i16)
+     Eval(v as i32)
  }

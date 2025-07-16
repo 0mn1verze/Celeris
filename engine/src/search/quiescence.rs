@@ -108,6 +108,10 @@ impl SearchWorker {
                     // We found a new best move sequence overall.
                     best_move = move_; // Update the best move.
 
+                    if NT::PV {
+                        pv.update_line(move_, &child_pv); // Update the Principal Variation (best move sequence).
+                    }
+
                     // Beta Cutoff (Fail-High): Check if our guaranteed score (`alpha`)
                     // meets or exceeds the opponent's limit (`beta`).
                     // This move is "too good". The opponent (at a higher node)
@@ -115,10 +119,6 @@ impl SearchWorker {
                     // Therefore, exploring further sibling moves at this node is unnecessary.
                     if value >= beta {
                         break;
-                    }
-
-                    if NT::PV {
-                        pv.update_line(move_, &child_pv); // Update the Principal Variation (best move sequence).
                     }
 
                     alpha = value; // Update alpha: Raise the lower bound of our guaranteed score.

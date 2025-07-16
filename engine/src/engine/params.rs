@@ -24,7 +24,7 @@ pub mod constants {
     pub const MOVE_BUFFER_MAX: usize = 32;
     pub const CONT_HIST_SIZE: usize = SEARCH_STACK_OFFSET;
     /// The value of the victim we are capturing
-    pub const MVV: [i16; PieceType::NUM] = [0, 2400, 2400, 4800, 9600, 0];
+    pub const MVV: [i32; PieceType::NUM] = [0, 2400, 2400, 4800, 9600, 0];
 }
 
 init_tunables! {

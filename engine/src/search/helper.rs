@@ -17,6 +17,7 @@ pub(crate) fn nmp_reduction(depth: usize) -> usize {
 }
 
 pub(crate) fn can_use_tt_value(tt_bound: TTBound, tt_value: Eval, alpha: Eval, beta: Eval) -> bool {
+    tt_value.is_valid() &&
     match tt_bound {
         // If the current node has already been searched to a higher depth, then the tt_value will be a better score.
         TTBound::Exact => true,

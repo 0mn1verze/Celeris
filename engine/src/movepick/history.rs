@@ -30,8 +30,6 @@ impl KillerEntry {
     }
 }
 
-use super::*;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Entry<const MAX: i16> {
     entry: Eval,
@@ -58,7 +56,7 @@ impl<const MAX: i16> History for Entry<MAX> {
     fn update(&mut self, bonus: i16) {
         let bonus = bonus.clamp(-MAX, MAX);
         let product = self.entry.0 as i32 * bonus.abs() as i32 / MAX as i32;
-        self.entry += Eval(bonus - product as i16);
+        self.entry += Eval(bonus as i32 - product);
     }
 }
 

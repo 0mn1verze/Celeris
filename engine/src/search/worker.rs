@@ -216,7 +216,7 @@ impl SearchWorker {
             let tt_eval = tt_entry.eval;
             let tt_value = tt_entry.value.from_tt(self.ply);
 
-            let eval = if tt_eval == -Eval::INFINITY {
+            let eval = if tt_eval.abs() >= Eval::INFINITY {
                 self.evaluate()
             } else {
                 tt_eval
@@ -233,6 +233,7 @@ impl SearchWorker {
         } else {
             // self.ss_mut().eval = evaluate_nnue(&self.board, &mut self.nnue);
             self.ss_mut().eval = self.evaluate();
+
             self.ss().eval
         }
     }

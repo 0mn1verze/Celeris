@@ -58,11 +58,11 @@ impl TTEntry {
     }
 
     pub fn unpack_eval(data: u64) -> Eval {
-        Eval(((data & Self::EVAL_MASK) >> 32) as i16)
+        Eval(((data & Self::EVAL_MASK) >> 32) as i32)
     }
 
     pub fn unpack_value(data: u64) -> Eval {
-        Eval(((data & Self::VALUE_MASK) >> 48) as i16)
+        Eval(((data & Self::VALUE_MASK) >> 48) as i32)
     }
 }
 
@@ -815,8 +815,8 @@ mod tests {
         let stored_mate_in_3 = mate_in_3.to_tt(ply); // Should add ply: (MATE - 3) + 10
         let stored_mated_in_5 = mated_in_5.to_tt(ply); // Should subtract ply: (-MATE + 5) - 10
 
-        assert_eq!(stored_mate_in_3, Eval::MATE - Eval(3) + Eval(ply as i16));
-        assert_eq!(stored_mated_in_5, -Eval::MATE + Eval(5) - Eval(ply as i16));
+        assert_eq!(stored_mate_in_3, Eval::MATE - Eval(3) + Eval(ply as i32));
+        assert_eq!(stored_mated_in_5, -Eval::MATE + Eval(5) - Eval(ply as i32));
 
         // Retrieving mate scores
         let retrieved_mate_in_3 = stored_mate_in_3.from_tt(ply); // Should subtract ply
