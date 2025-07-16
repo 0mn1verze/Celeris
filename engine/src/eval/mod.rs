@@ -6,7 +6,7 @@ use crate::constants::*;
 use chess::impl_ari_ops;
 
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Eval(pub i16);
+pub struct Eval(pub i32);
 
 impl_ari_ops!(Eval);
 
@@ -18,26 +18,26 @@ impl Eval {
 
     pub const MATE: Eval = Eval(32000);
 
-    pub const MATE_BOUND: Eval = Eval(Self::MATE.0 - MAX_DEPTH as i16);
+    pub const MATE_BOUND: Eval = Eval(Self::MATE.0 - MAX_DEPTH as i32);
 
     pub fn abs(&self) -> Eval {
         Eval(self.0.abs())
     }
 
     pub fn is_valid(&self) -> bool {
-        self.abs() >= Eval::INFINITY
+        self.abs() <= Eval::INFINITY
     }
 
     pub fn mated_in(ply: u16) -> Eval {
-        -Self::MATE + Eval(ply as i16)
+        -Self::MATE + Eval(ply as i32)
     }
 
     pub fn mate_in(ply: u16) -> Eval {
-        Self::MATE - Eval(ply as i16)
+        Self::MATE - Eval(ply as i32)
     }
 
     pub fn from_tt(&self, ply: u16) -> Eval {
-        let ply = Eval(ply as i16);
+        let ply = Eval(ply as i32);
 
         if *self >= Self::MATE_BOUND {
             *self - ply
@@ -49,7 +49,7 @@ impl Eval {
     }
 
     pub fn to_tt(&self, ply: u16) -> Eval {
-        let ply = Eval(ply as i16);
+        let ply = Eval(ply as i32);
 
         if *self >= Self::MATE_BOUND {
             *self + ply

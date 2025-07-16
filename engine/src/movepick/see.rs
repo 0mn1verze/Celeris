@@ -301,13 +301,13 @@ mod tests {
 
     #[test]
     fn test_see_bulk() {
-        const P: i16 = 150;
-        const N: i16 = 340;
-        const R: i16 = 480;
-        const Q: i16 = 1000;
+        const P: i32 = 150;
+        const N: i32 = 340;
+        const R: i32 = 480;
+        const Q: i32 = 1000;
 
         #[rustfmt::skip]
-        const SEE_TESTS: &[(&str, &str, i16, bool)] = &[
+        const SEE_TESTS: &[(&str, &str, i32, bool)] = &[
             ("2k5/8/8/4p3/8/8/2K1R3/8 w - - 0 1", "e2e5", 0, true),
             ("3k4/8/8/4p3/3P4/8/8/5K2 w - - 0 1", "d4e5", P, true),
             ("3k4/8/5p2/4p3/3P4/8/8/5K2 w - - 0 1", "d4e5", P, false),

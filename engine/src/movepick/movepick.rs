@@ -23,15 +23,15 @@ pub struct MovePicker<const TACTICAL: bool> {
 
     // Scored move list items
     move_list: MoveList,
-    scores: [Eval; 256],
+    scores: [i32; 256],
     index: usize,
 
     quiet_start: usize,
     bad_cap_start: usize,
 }
 
-fn captured_value(captured: PieceType) -> Eval {
-    Eval(MVV[captured.index()])
+fn captured_value(captured: PieceType) -> i32 {
+    MVV[captured.index()]
 }
 
 impl<const TACTICAL: bool> MovePicker<TACTICAL> {
@@ -58,7 +58,7 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
             tt_move,
             killers,
             move_list: MoveList::new(),
-            scores: [Eval::ZERO; 256],
+            scores: [0; 256],
             index: 0,
             quiet_start: 0,
             bad_cap_start: 0,
@@ -80,7 +80,7 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
                 _ => unsafe { board.on_unchecked(move_.to()).pt() },
             };
 
-            let mut score = captured_value(captured) + stats.cht.get(board, move_);
+            let mut score = captured_value(captured) + stats.cht.get(board, move_).0 as i32;
 
             if move_.is_promotion() {
                 score += captured_value(unsafe { move_.promotion_pt() });
@@ -107,11 +107,11 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
         for i in self.quiet_start..self.move_list.len() {
             let move_ = self.move_list[i];
 
-            self.scores[i] = stats.ht.get(board, move_);
+            self.scores[i] = stats.ht.get(board, move_).0 as i32;
 
             for i in 0..CONT_HIST_SIZE {
                 let (piece, to) = ss_buffer[i].piece_to();
-                self.scores[i] += stats.ct.get_entry_ref(piece, to).get(board, move_);
+                self.scores[i] += stats.ct.get_entry_ref(piece, to).get(board, move_).0 as i32;
             }
         }
     }

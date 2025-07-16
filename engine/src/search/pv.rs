@@ -3,7 +3,7 @@ use chess::{
     board::{Board, MAX_MOVES},
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PVLine {
     moves: [Move; MAX_MOVES],
     length: usize,
