@@ -54,8 +54,6 @@ impl SearchWorker {
         mut beta: Eval,
         mut depth: usize,
     ) -> Eval {
-        let us = self.board.stm();
-
         pv.clear();
 
         if self.should_stop_search() {
