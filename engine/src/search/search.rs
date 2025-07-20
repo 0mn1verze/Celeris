@@ -1,11 +1,12 @@
 use chess::Move;
 
 use crate::{
-    MoveBuffer, SearchStackEntry, SearchWorker,
+    MoveBuffer, MoveStage, SearchStackEntry, SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH},
     eval::Eval,
     movepick::MovePicker,
     search::PVLine,
+    see,
 };
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
@@ -70,6 +71,10 @@ impl SearchWorker {
 
             delta += delta / Eval(2);
         }
+    }
+
+    fn nw_search(&mut self, tt: &TT, pv: &mut PVLine, window: Eval, depth: usize) -> Eval {
+        self.negamax::<NonPV>(tt, pv, window, window + Eval(1), depth)
     }
 
     fn negamax<NT: NodeType>(
@@ -147,103 +152,103 @@ impl SearchWorker {
             tt_move = tt_entry.best_move;
             tt_capture = self.board.is_capture(tt_move);
         }
-
+        // Get the best static evaluation of the position
         let eval = self.static_eval(in_check, tt_entry);
-
+        // Set up flags to record trends of the game
         let improving = self.improving();
-
         let opp_worsening = self.opp_worsening();
 
-        // --- Futility Pruning ---
-        // If the eval is well above beta, then we assume the eval will hold above beta
-        if !NT::PV && !in_check && self.can_do_fp(depth, eval, beta, improving) {
-            return beta;
-        }
-
-        // --- Null Move Pruning ---
-        // If the position is so strong that giving our opponent a
-        // double move still allows us to maintain our advantage,
-        // then we can prune early with some safety
-        if !NT::PV && !in_check && self.can_do_nmp(depth, eval, beta) {
-            let r = nmp_reduction(depth);
-
-            self.make_null_move(tt);
-
-            let value =
-                -self.negamax::<NonPV>(tt, &mut child_pv, -beta, -beta + Eval(1), depth - r);
-
-            self.undo_null_move();
-
-            if value >= beta {
+        // --- Pruning ---
+        if !NT::PV && !in_check {
+            // --- Futility Pruning ---
+            // If the eval is well above beta, then we assume the eval will hold above beta
+            if self.can_do_fp(depth, eval, beta, improving) {
                 return beta;
+            }
+
+            // --- Null Move Pruning ---
+            // If the position is so strong that giving our opponent a
+            // double move still allows us to maintain our advantage,
+            // then we can prune early with some safety
+            if self.can_do_nmp(depth, eval, beta) {
+                let r = nmp_reduction(depth);
+
+                self.make_null_move(tt);
+                let value = -self.nw_search(tt, &mut child_pv, -beta, depth - r);
+                self.undo_null_move();
+
+                if value >= beta {
+                    return beta;
+                }
             }
         }
         // --- Set up main loop ---
         let mut best_value = -Eval::INFINITY;
         let mut best_move = Move::NONE;
-
         // Set up capture and quiet move list
         let mut caps_tried = MoveBuffer::default();
         let mut quiets_tried = MoveBuffer::default();
-
         let mut move_count = 0;
-
         // Clear child killer moves
         self.ss_look_ahead(2).killers.clear();
         // Get killer moves
         let killers = self.ss().killers.get();
-
         // Create search stack buffer for continuation history lookup
         let ss_buffer = [self.ss_at(1), self.ss_at(2)];
         // Initialise move picker
         let mut mp = MovePicker::<false>::new(&self.board, tt_move, killers);
-
         // --- Main Loop ---
         while let Some(move_) = mp.next(&self.board, &self.stats, &ss_buffer) {
             // Update number of moves searched in this node
             move_count += 1;
+            // Move flags
+            let is_capture = move_.is_capture();
+            let is_promotion = move_.is_promotion();
+            // New depth
+            let new_depth = depth.max(1) - 1;
 
-            if !NT::ROOT && best_value.is_valid() && self.board.has_non_pawn_material(us) {
-                if depth <= 8 && move_count >= (5 + 2 * depth * depth) / (2 - improving as usize) {
+            // --- Quiet Move Pruning ---
+            if !NT::ROOT && !in_check && self.can_do_pruning(best_value) {
+                // --- Late Move Pruning ---
+                // Near the leafs, trust that the move ordering is sound
+                // and ignore the quiet moves after a certain threshold
+                if self.can_do_lmp(depth, move_count, improving) {
                     mp.skip_quiets();
                 }
             }
+
+            // --- SEE Pruning ---
+            // Near the leafs we can ignore the bad noisy moves that fail
+            // Static Exchange Evaluation by a threshold
+            if !in_check && self.can_do_see_prune(depth, best_value, mp.stage, move_) {
+                continue;
+            }
+
             // Make move and update ply, node counters, prefetch hash entry, etc...
             self.make_move(tt, move_);
             // Remember previous node count
             let start_nodes = self.nodes;
-            // Move flags
-            let is_capture = move_.is_capture();
-            // let is_promotion = move_.is_promotion();
-            // New depth
-            let new_depth = depth.max(1) - 1;
             // Recursive search
             let mut value = alpha;
-            // Late Move Reduction, search moves that are sufficiently far from the terminal nodes and are not tactical using a reduced depth zero window search to see if it is promising or not.
-            let full_search = if depth >= 2 && move_count > 3 + NT::PV as usize {
+            // --- Late Move Reduction ---
+            // Search moves that are sufficiently far from the terminal nodes
+            // and are not tactical using a reduced depth zero window search
+            // to see if it is promising or not.
+            let full_search = if self.can_do_lmr(depth, move_count, NT::PV) {
                 // Calculate dynamic depth reduction
                 let mut r = lmr_base_reduction(depth, move_count);
-
                 // Increase reductions for moves we think might be bad
                 r += !NT::PV as usize;
                 r += !improving as usize;
                 r += tt_capture as usize;
-
                 // Decrease reductions for moves we think might be good
                 r -= in_check as usize;
                 r -= self.board.in_check() as usize;
-
                 // We don't want to extend or go into qsearch.
                 // Since we have checked for qsearch, depth is guaranteed to be >= 1.
                 r = r.clamp(1, depth - 1);
 
-                value = -self.negamax::<NonPV>(
-                    tt,
-                    &mut child_pv,
-                    -alpha - Eval(1),
-                    -alpha,
-                    new_depth - r,
-                );
+                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth - r);
 
                 value > alpha && r > 1
             } else {
@@ -253,8 +258,7 @@ impl SearchWorker {
             // We do a zero window full depth search if the reduced depth search revealed a potentially better move,
             // or if other conditions like being in a NonPV node, searching non-first moves, are met.
             if full_search {
-                value =
-                    -self.negamax::<NonPV>(tt, &mut child_pv, -alpha - Eval(1), -alpha, new_depth);
+                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth);
             }
 
             // If we are current searching in a PV node, the if its the first move or further searches revealed a potentially better move,

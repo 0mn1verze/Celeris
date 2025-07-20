@@ -8,7 +8,7 @@ pub(crate) use move_buffer::MoveBuffer;
 pub use movepick::MovePicker;
 pub use see::see;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum MoveStage {
     TTMove,
     GenCaptures,

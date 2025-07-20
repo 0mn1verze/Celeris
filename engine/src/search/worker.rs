@@ -7,10 +7,11 @@ use chess::{Move, Piece, Square, board::Board};
 use nnue::accumulator::Accumulator;
 
 use crate::{
-    HistoryTable, Interface, MoveBuffer, SearchStackEntry, SearchStats, SearchWorker,
+    HistoryTable, Interface, MoveBuffer, MoveStage, SearchStackEntry, SearchStats, SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
     eval::{Eval, evaluate_nnue},
     search::PVLine,
+    see,
 };
 
 use super::{Clock, TT, helper::*, tt::TTEntry};
@@ -258,6 +259,18 @@ impl SearchWorker {
         }
     }
 
+    pub(super) fn terminal_score(&self, in_check: bool) -> Eval {
+        if in_check {
+            Eval::mated_in(self.ply)
+        } else {
+            Eval::DRAW
+        }
+    }
+
+    pub(super) fn can_do_pruning(&self, best_value: Eval) -> bool {
+        best_value.is_valid() && self.board.has_non_pawn_material(self.board.stm())
+    }
+
     pub(super) fn can_do_nmp(&self, depth: usize, eval: Eval, beta: Eval) -> bool {
         depth >= 2
             && self.ply_from_null > 0
@@ -269,5 +282,31 @@ impl SearchWorker {
     pub(super) fn can_do_fp(&self, depth: usize, eval: Eval, beta: Eval, improving: bool) -> bool {
         let fp_margin = Eval((80 * depth - 60 * improving as usize) as i32);
         depth <= 8 && eval - fp_margin >= beta
+    }
+
+    pub(super) fn can_do_lmp(&self, depth: usize, move_count: usize, improving: bool) -> bool {
+        depth <= 8 && move_count >= (5 + 2 * depth * depth) / (2 - improving as usize)
+    }
+
+    pub(super) fn can_do_lmr(&self, depth: usize, move_count: usize, is_pv: bool) -> bool {
+        depth >= 2 && move_count > 3 + is_pv as usize
+    }
+
+    pub(super) fn can_do_see_prune(
+        &self,
+        depth: usize,
+        best_value: Eval,
+        stage: MoveStage,
+        move_: Move,
+    ) -> bool {
+        // Set up SEE margins
+        let d = depth as i32;
+        let see_margins = [Eval(-70 * d), Eval(-20 * d * d)];
+        let is_capture = move_.is_capture();
+
+        !best_value.is_terminal()
+            && depth <= 10
+            && stage > MoveStage::GoodCaptures
+            && !see(&self.board, move_, see_margins[is_capture as usize])
     }
 }

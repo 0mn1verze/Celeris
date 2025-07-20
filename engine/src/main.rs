@@ -5,7 +5,7 @@ use engine::tunables::spsa_output_txt;
 use engine::{UCI, run_bench};
 use std::env::args;
 
-const DEFAULT_CMD_BENCH_DEPTH: usize = 6;
+const DEFAULT_CMD_BENCH_DEPTH: usize = 12;
 
 fn main() {
     let mut cli_args = args();

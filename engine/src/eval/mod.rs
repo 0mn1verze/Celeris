@@ -28,6 +28,10 @@ impl Eval {
         self.abs() <= Eval::INFINITY
     }
 
+    pub fn is_terminal(&self) -> bool {
+        self.abs() >= Eval::MATE_BOUND && self.is_valid()
+    }
+
     pub fn mated_in(ply: u16) -> Eval {
         -Self::MATE + Eval(ply as i32)
     }
