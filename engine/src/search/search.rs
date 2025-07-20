@@ -154,7 +154,16 @@ impl SearchWorker {
 
         let opp_worsening = self.opp_worsening();
 
+        // --- Futility Pruning ---
+        // If the eval is well above beta, then we assume the eval will hold above beta
+        if !NT::PV && !in_check && self.can_do_fp(depth, eval, beta, improving) {
+            return beta;
+        }
+
         // --- Null Move Pruning ---
+        // If the position is so strong that giving our opponent a
+        // double move still allows us to maintain our advantage,
+        // then we can prune early with some safety
         if !NT::PV && !in_check && self.can_do_nmp(depth, eval, beta) {
             let r = nmp_reduction(depth);
 
@@ -169,7 +178,6 @@ impl SearchWorker {
                 return beta;
             }
         }
-
         // --- Set up main loop ---
         let mut best_value = -Eval::INFINITY;
         let mut best_move = Move::NONE;
@@ -200,7 +208,6 @@ impl SearchWorker {
                     mp.skip_quiets();
                 }
             }
-
             // Make move and update ply, node counters, prefetch hash entry, etc...
             self.make_move(tt, move_);
             // Remember previous node count

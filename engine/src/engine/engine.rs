@@ -83,7 +83,7 @@ impl EngineController {
         println!("option name UCI_Chess960 type check default false");
         println!("option name ClearHash type button");
         println!("option name Hash type spin default 32 min 1 max 128");
-        println!("option name Threads type spin default 12 min 1 max 12");
+        println!("option name Threads type spin default 1 min 1 max 12");
 
         #[cfg(feature = "tune")]
         println!("{}", spsa_output_opts());

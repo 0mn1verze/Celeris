@@ -265,4 +265,9 @@ impl SearchWorker {
             && self.board.has_non_pawn_material(self.board.stm())
             && beta >= -Eval::MATE_BOUND
     }
+
+    pub(super) fn can_do_fp(&self, depth: usize, eval: Eval, beta: Eval, improving: bool) -> bool {
+        let fp_margin = Eval((80 * depth - 60 * improving as usize) as i32);
+        depth <= 8 && eval - fp_margin >= beta
+    }
 }

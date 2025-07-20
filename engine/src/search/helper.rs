@@ -17,17 +17,17 @@ pub(crate) fn nmp_reduction(depth: usize) -> usize {
 }
 
 pub(crate) fn can_use_tt_value(tt_bound: TTBound, tt_value: Eval, alpha: Eval, beta: Eval) -> bool {
-    tt_value.is_valid() &&
-    match tt_bound {
-        // If the current node has already been searched to a higher depth, then the tt_value will be a better score.
-        TTBound::Exact => true,
-        // If the current node has a upper bound, then if the current eval is greater than the tt_value, it means the current eval is optimistic so we should use tt_value instead
-        TTBound::Upper if tt_value <= alpha => true,
-        // If the current node has a lower bound, then if the current eval is lower than the tt_value, it means we are underestimating our opponent's response, so we should use tt_value instead
-        TTBound::Lower if tt_value >= beta => true,
-        // If there is no stored value, or the above conditions are not met, we use eval, since it provides a tighter bound
-        _ => false,
-    }
+    tt_value.is_valid()
+        && match tt_bound {
+            // If the current node has already been searched to a higher depth, then the tt_value will be a better score.
+            TTBound::Exact => true,
+            // If the current node has a upper bound, then if the current eval is greater than the tt_value, it means the current eval is optimistic so we should use tt_value instead
+            TTBound::Upper if tt_value <= alpha => true,
+            // If the current node has a lower bound, then if the current eval is lower than the tt_value, it means we are underestimating our opponent's response, so we should use tt_value instead
+            TTBound::Lower if tt_value >= beta => true,
+            // If there is no stored value, or the above conditions are not met, we use eval, since it provides a tighter bound
+            _ => false,
+        }
 }
 
 pub(crate) fn calculate_bonus(depth: usize) -> i16 {
