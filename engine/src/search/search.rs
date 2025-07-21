@@ -46,7 +46,7 @@ impl SearchWorker {
         loop {
             let mut pv = PVLine::default();
 
-            let eval = self.negamax::<Root>(tt, &mut pv, alpha, beta, search_depth);
+            let eval = self.negamax::<Root>(tt, &mut pv, alpha, beta, search_depth, false);
 
             if self.stop {
                 return;
@@ -73,8 +73,15 @@ impl SearchWorker {
         }
     }
 
-    fn nw_search(&mut self, tt: &TT, pv: &mut PVLine, window: Eval, depth: usize) -> Eval {
-        self.negamax::<NonPV>(tt, pv, window, window + Eval(1), depth)
+    fn nw_search(
+        &mut self,
+        tt: &TT,
+        pv: &mut PVLine,
+        window: Eval,
+        depth: usize,
+        cutnode: bool,
+    ) -> Eval {
+        self.negamax::<NonPV>(tt, pv, window, window + Eval(1), depth, cutnode)
     }
 
     fn negamax<NT: NodeType>(
@@ -84,6 +91,7 @@ impl SearchWorker {
         mut alpha: Eval,
         mut beta: Eval,
         mut depth: usize,
+        cutnode: bool,
     ) -> Eval {
         let us = self.board.stm();
 
@@ -94,6 +102,8 @@ impl SearchWorker {
         }
 
         let in_check = self.board.in_check();
+        let excl_move = self.ss().excl_move;
+        let singular = excl_move.is_valid();
 
         // --- Quiescence search in base case ---
         if depth == 0 && !in_check {
@@ -137,11 +147,17 @@ impl SearchWorker {
         let mut tt_move = Move::NONE;
         let mut tt_capture = false;
         let tt_hit = tt_entry.is_some();
-
+        let mut tt_bound = TTBound::None;
+        let mut tt_depth = 0;
+        let mut tt_value = Eval::ZERO;
+        // --- Hash Table Cut ---
+        // If a previously stored value can be trusted (higher depth),
+        // then it would be safe to cut the branch and return the stored value
         if let Some(tt_entry) = tt_entry {
-            let tt_value = tt_entry.value.from_tt(self.ply);
+            tt_value = tt_entry.value.from_tt(self.ply);
 
             if !NT::PV
+                && !singular
                 && tt_entry.depth >= depth as u8
                 && can_use_tt_value(tt_entry.bound, tt_value, alpha, beta)
             {
@@ -151,7 +167,10 @@ impl SearchWorker {
             // Update best move from hash table
             tt_move = tt_entry.best_move;
             tt_capture = self.board.is_capture(tt_move);
+            tt_bound = tt_entry.bound;
+            tt_depth = tt_entry.depth as usize;
         }
+
         // Get the best static evaluation of the position
         let eval = self.static_eval(in_check, tt_entry);
         // Set up flags to record trends of the game
@@ -159,7 +178,7 @@ impl SearchWorker {
         let opp_worsening = self.opp_worsening();
 
         // --- Pruning ---
-        if !NT::PV && !in_check {
+        if !NT::PV && !in_check && !singular {
             // --- Futility Pruning ---
             // If the eval is well above beta, then we assume the eval will hold above beta
             if self.can_do_fp(depth, eval, beta, improving) {
@@ -174,7 +193,7 @@ impl SearchWorker {
                 let r = nmp_reduction(depth);
 
                 self.make_null_move(tt);
-                let value = -self.nw_search(tt, &mut child_pv, -beta, depth - r);
+                let value = -self.nw_search(tt, &mut child_pv, -beta, depth - r, false);
                 self.undo_null_move();
 
                 if value >= beta {
@@ -199,13 +218,18 @@ impl SearchWorker {
         let mut mp = MovePicker::<false>::new(&self.board, tt_move, killers);
         // --- Main Loop ---
         while let Some(move_) = mp.next(&self.board, &self.stats, &ss_buffer) {
+            // Skip excluded move
+            if move_ == excl_move {
+                continue;
+            }
+
             // Update number of moves searched in this node
             move_count += 1;
             // Move flags
             let is_capture = move_.is_capture();
             let is_promotion = move_.is_promotion();
             // New depth
-            let new_depth = depth.max(1) - 1;
+            let mut new_depth = depth.max(1) - 1;
 
             // --- Quiet Move Pruning ---
             if !NT::ROOT && !in_check && self.can_do_pruning(best_value) {
@@ -224,12 +248,72 @@ impl SearchWorker {
                 continue;
             }
 
+            // --- Singular Extension Search ---
+            if !NT::ROOT
+                && !singular
+                && self.can_do_singular(depth, tt_depth, move_, tt_move, tt_value, tt_bound)
+            {
+                // Calculate a value
+                let singular_beta = (tt_value - Eval(depth as i32)).max(-Eval::MATE);
+
+                // Tell child nodes that we are in a singular search
+                self.ss_mut().excl_move = move_;
+                // Search the rest of the moves at a reduced depth.
+                let value = self.nw_search(
+                    tt,
+                    &mut child_pv,
+                    singular_beta - Eval(1),
+                    new_depth / 2,
+                    cutnode,
+                );
+                self.ss_mut().excl_move = Move::NONE;
+
+                // --- Multi Cut Pruning ---
+                // if the only move is even better than beta then we can prune it
+                if value >= beta {
+                    return beta;
+                }
+
+                // If no other move can reach the value of the tt_move (best_move),
+                // then extend this move to check if it is really the only move
+                let extension =
+                    // If a null window search indicated that all the other moves are a lot worse,
+                    // then this move is very promising
+                    if value < singular_beta - Eval(50) {
+                        3
+                    } else if value < singular_beta - Eval(25) {
+                        2
+                    } else if value < singular_beta {
+                        1
+                    // Opposite Effect: Move is too good to be true, so we try to ignore it safely
+                    } else if tt_value >= beta {
+                        -3
+                    // We are in node after aggressive pruning, so if the tt_move is not the best only move,
+                    // then take it with a grain of salt
+                    } else if cutnode {
+                        -2
+                    // Deeper search suggests that the tt_move is not so promising after all
+                    } else if tt_value <= value {
+                        -1
+                    } else {
+                        0
+                    };
+
+                // Update new depth with new extensions
+                new_depth = if extension >= 0 {
+                    new_depth.saturating_add(extension as usize)
+                } else {
+                    new_depth.saturating_sub((-extension) as usize)
+                };
+            }
+
             // Make move and update ply, node counters, prefetch hash entry, etc...
             self.make_move(tt, move_);
             // Remember previous node count
             let start_nodes = self.nodes;
             // Recursive search
             let mut value = alpha;
+
             // --- Late Move Reduction ---
             // Search moves that are sufficiently far from the terminal nodes
             // and are not tactical using a reduced depth zero window search
@@ -248,7 +332,7 @@ impl SearchWorker {
                 // Since we have checked for qsearch, depth is guaranteed to be >= 1.
                 r = r.clamp(1, depth - 1);
 
-                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth - r);
+                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth - r, false);
 
                 value > alpha && r > 1
             } else {
@@ -258,13 +342,20 @@ impl SearchWorker {
             // We do a zero window full depth search if the reduced depth search revealed a potentially better move,
             // or if other conditions like being in a NonPV node, searching non-first moves, are met.
             if full_search {
-                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth);
+                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth, !cutnode);
             }
 
             // If we are current searching in a PV node, the if its the first move or further searches revealed a potentially better move,
             // we do a full search to further investigate
             if NT::PV && (move_count == 1 || value > alpha) {
-                value = -self.negamax::<NT::Next>(tt, &mut child_pv, -beta, -alpha, new_depth);
+                value = -self.negamax::<NT::Next>(
+                    tt,
+                    &mut child_pv,
+                    -beta,
+                    -alpha,
+                    new_depth,
+                    !cutnode,
+                );
             }
 
             // Undo move and decrement ply counter
@@ -322,7 +413,9 @@ impl SearchWorker {
 
         // If move count is 0, it is either a stalemate or a mate in self.ply
         if move_count == 0 {
-            best_value = if in_check {
+            best_value = if excl_move.is_valid() {
+                alpha // Return the alpha gathered from other branches, since singular search does not explore all legal moves
+            } else if in_check {
                 Eval::mated_in(self.ply)
             } else {
                 Eval::DRAW
@@ -332,24 +425,26 @@ impl SearchWorker {
             self.update_search_stats(best_move, depth, &caps_tried, &quiets_tried);
         }
 
-        // Write to TT, save static eval
-        let bound = if best_value >= beta {
-            TTBound::Lower
-        } else if NT::PV && best_move.is_valid() {
-            TTBound::Exact
-        } else {
-            TTBound::Upper
-        };
+        if !singular {
+            // Write to TT, save static eval
+            let bound = if best_value >= beta {
+                TTBound::Lower
+            } else if NT::PV && best_move.is_valid() {
+                TTBound::Exact
+            } else {
+                TTBound::Upper
+            };
 
-        tt.write(
-            self.board.key(),
-            bound,
-            self.ply,
-            depth as u8,
-            best_move,
-            eval,
-            best_value,
-        );
+            tt.write(
+                self.board.key(),
+                bound,
+                self.ply,
+                depth as u8,
+                best_move,
+                eval,
+                best_value,
+            );
+        }
 
         best_value
     }

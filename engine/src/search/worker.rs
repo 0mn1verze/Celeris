@@ -10,7 +10,7 @@ use crate::{
     HistoryTable, Interface, MoveBuffer, MoveStage, SearchStackEntry, SearchStats, SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
     eval::{Eval, evaluate_nnue},
-    search::PVLine,
+    search::{PVLine, tt::TTBound},
     see,
 };
 
@@ -213,6 +213,8 @@ impl SearchWorker {
         if in_check {
             self.ss_mut().eval = -Eval::INFINITY;
             self.ss().eval
+        } else if self.ss().excl_move.is_valid() {
+            self.ss().eval
         } else if let Some(tt_entry) = tt_entry {
             let tt_eval = tt_entry.eval;
             let tt_value = tt_entry.value.from_tt(self.ply);
@@ -308,5 +310,23 @@ impl SearchWorker {
             && depth <= 10
             && stage > MoveStage::GoodCaptures
             && !see(&self.board, move_, see_margins[is_capture as usize])
+    }
+
+    pub(super) fn can_do_singular(
+        &self,
+        depth: usize,
+        tt_depth: usize,
+        move_: Move,
+        tt_move: Move,
+
+        tt_value: Eval,
+        tt_bound: TTBound,
+    ) -> bool {
+        depth >= 8
+            && move_ == tt_move
+            && tt_value.is_valid()
+            && !tt_value.is_terminal()
+            && tt_depth >= depth - 3
+            && matches!(tt_bound, TTBound::Lower | TTBound::Exact)
     }
 }

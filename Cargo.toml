@@ -10,5 +10,5 @@ target-cpu = "native"   # Enable CPU-specific optimizations
 incremental = false     # Enable aggressive inlining
 panic = "abort"         # Enable panic=abort for smaller binary size
 overflow-checks = false # Enable overflow checks in debug mode
-debug = false           # No debug information
+debug = true            # No debug information
 strip = true            # No symbols
