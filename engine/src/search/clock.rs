@@ -8,7 +8,7 @@ use std::{
 
 use chess::{Colour, Move, Square};
 
-use crate::engine::TimeControl;
+use crate::{Depth, engine::TimeControl};
 
 use super::MIN_DEPTH;
 
@@ -146,7 +146,7 @@ impl Clock {
         self.start_time.elapsed()
     }
 
-    pub fn start_search(&mut self, depth: usize, nodes: u64, best_move: Move) -> bool {
+    pub fn start_search(&mut self, depth: Depth, nodes: u64, best_move: Move) -> bool {
         if self.global_stop.load(Ordering::Relaxed) {
             return false;
         }

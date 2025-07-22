@@ -1,7 +1,7 @@
 use super::tt::TTBound;
-use crate::{Eval, tunables::*};
+use crate::{Depth, Eval, tunables::*};
 
-pub(crate) fn lmr_base_reduction(depth: usize, move_count: usize) -> usize {
+pub(crate) fn lmr_base_reduction(depth: Depth, move_count: usize) -> Depth {
     if depth == 0 || move_count == 0 {
         return 0;
     }
@@ -9,10 +9,10 @@ pub(crate) fn lmr_base_reduction(depth: usize, move_count: usize) -> usize {
     let lmr_base = lmr_base() as f32 / 1024.0;
     let lmr_mult = lmr_mult() as f32 / 1024.0;
 
-    (lmr_base + (depth as f32).ln() * (move_count as f32).ln() / lmr_mult) as usize
+    (lmr_base + (depth as f32).ln() * (move_count as f32).ln() / lmr_mult) as i32
 }
 
-pub(crate) fn nmp_reduction(depth: usize) -> usize {
+pub(crate) fn nmp_reduction(depth: Depth) -> Depth {
     (nmp_min() + depth / nmp_div()).min(depth)
 }
 
@@ -30,6 +30,6 @@ pub(crate) fn can_use_tt_value(tt_bound: TTBound, tt_value: Eval, alpha: Eval, b
         }
 }
 
-pub(crate) fn calculate_bonus(depth: usize) -> i16 {
+pub(crate) fn calculate_bonus(depth: Depth) -> i16 {
     (350 * (depth.saturating_sub(1))).min(1600) as i16
 }

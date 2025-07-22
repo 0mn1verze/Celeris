@@ -1,9 +1,13 @@
 use crate::init_tunables;
 
+pub type Depth = i32;
+
 /// Defines constants used by the engine controller and potentially other parts.
 pub mod constants {
     // Import necessary types for constants.
     use chess::{PieceType, board::MAX_MOVES};
+
+    use crate::Depth;
 
     pub const NAME: &str = "Celeris";
     pub const VERSION: &str = "0.0.1";
@@ -15,8 +19,8 @@ pub mod constants {
     pub const TT_SIZE: usize = 32;
 
     // Search-related constants.
-    pub const MAX_DEPTH: usize = MAX_MOVES;
-    pub const MIN_DEPTH: usize = 4;
+    pub const MAX_DEPTH: Depth = MAX_MOVES as Depth;
+    pub const MIN_DEPTH: Depth = 4;
     pub const SEARCH_STACK_OFFSET: usize = 2;
 
     // Moveordering-related constants
@@ -36,8 +40,8 @@ init_tunables! {
     lmr_mult: i32 = 2048, 1500, 4000, 100;
 
     // Null Move Pruning
-    nmp_min: usize = 4, 2, 6, 1;
-    nmp_div: usize = 4, 2, 6, 1;
+    nmp_min: i32 = 4, 2, 6, 1;
+    nmp_div: i32 = 4, 2, 6, 1;
 
     // Piece values
     pawn_val:   i32 = 82, 60, 140, 5;

@@ -2,10 +2,10 @@ use chess::utils::perft_bench;
 #[cfg(feature = "tune")]
 use engine::tunables::spsa_output_txt;
 
-use engine::{UCI, run_bench};
+use engine::{Depth, UCI, run_bench};
 use std::env::args;
 
-const DEFAULT_CMD_BENCH_DEPTH: usize = 12;
+const DEFAULT_CMD_BENCH_DEPTH: Depth = 12;
 
 fn main() {
     let mut cli_args = args();
@@ -18,7 +18,7 @@ fn main() {
         Some("bench") => {
             let depth = cli_args
                 .next()
-                .and_then(|s| s.parse::<usize>().ok())
+                .and_then(|s| s.parse::<Depth>().ok())
                 .unwrap_or_else(|| {
                     println!(
                         "info string invalid format, using default depth {DEFAULT_CMD_BENCH_DEPTH}."

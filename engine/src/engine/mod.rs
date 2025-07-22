@@ -8,5 +8,5 @@ mod time;
 pub use command::Command;
 pub use interface::UCI;
 pub use options::EngineOption;
-pub use params::{constants, tunables};
+pub use params::{Depth, constants, tunables};
 pub use time::TimeControl;

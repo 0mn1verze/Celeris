@@ -1,7 +1,7 @@
 use chess::Move;
 
 use crate::{
-    SearchStackEntry, SearchWorker,
+    Depth, SearchStackEntry, SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH},
     eval::Eval,
     movepick::MovePicker,
@@ -18,7 +18,7 @@ impl SearchWorker {
         mut alpha: Eval,
         beta: Eval,
     ) -> Eval {
-        self.seldepth = self.seldepth.max(self.ply as usize);
+        self.seldepth = self.seldepth.max(self.ply as Depth);
 
         pv.clear();
 

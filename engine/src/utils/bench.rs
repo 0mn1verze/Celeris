@@ -1,4 +1,4 @@
-use crate::{TimeControl, search::TT, thread::ThreadPool};
+use crate::{Depth, TimeControl, search::TT, thread::ThreadPool};
 use chess::board::Board;
 use std::{
     sync::{Arc, atomic::AtomicBool},
@@ -74,7 +74,7 @@ const FENS: [&str; 66] = [
     "rnbqkb1r/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR b KQkq c3 0 2",
 ];
 
-pub fn run_bench(depth: usize) {
+pub fn run_bench(depth: Depth) {
     let stop = Arc::new(AtomicBool::new(false));
     let mut tt = TT::default();
     let mut thread = ThreadPool::new(Arc::clone(&stop));

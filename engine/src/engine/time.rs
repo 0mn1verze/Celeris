@@ -1,5 +1,7 @@
 use std::str::{FromStr, SplitWhitespace};
 
+use crate::Depth;
+
 /// Helper function to parse the next token in a `SplitWhitespace` iterator
 /// into a specified type `T` that implements `FromStr`.
 fn parse<T: FromStr>(tokens: &mut SplitWhitespace) -> Result<T, &'static str> {
@@ -16,13 +18,13 @@ pub enum TimeControl {
     /// Search indefinitely until stopped.
     Infinite,
     /// Search up to a fixed depth.
-    FixedDepth(usize),
+    FixedDepth(Depth),
     /// Search up to a fixed number of nodes.
     FixedNodes(u64),
     /// Search for a fixed amount of time (in milliseconds).
     FixedTime(u64),
     /// Search specifically for a checkmate within a certain number of moves.
-    Mate(usize),
+    Mate(Depth),
     /// Standard UCI time control with remaining time and optional increments/moves to go.
     Variable {
         wtime: u64,

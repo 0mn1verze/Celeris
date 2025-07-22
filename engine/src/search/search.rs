@@ -1,7 +1,7 @@
 use chess::Move;
 
 use crate::{
-    MoveBuffer, MoveStage, SearchStackEntry, SearchWorker,
+    Depth, MoveBuffer, MoveStage, PV, SearchStackEntry, SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH},
     eval::Eval,
     movepick::MovePicker,
@@ -78,7 +78,7 @@ impl SearchWorker {
         tt: &TT,
         pv: &mut PVLine,
         window: Eval,
-        depth: usize,
+        depth: Depth,
         cutnode: bool,
     ) -> Eval {
         self.negamax::<NonPV>(tt, pv, window, window + Eval(1), depth, cutnode)
@@ -90,7 +90,7 @@ impl SearchWorker {
         pv: &mut PVLine,
         mut alpha: Eval,
         mut beta: Eval,
-        mut depth: usize,
+        mut depth: Depth,
         cutnode: bool,
     ) -> Eval {
         let us = self.board.stm();
@@ -136,7 +136,7 @@ impl SearchWorker {
         self.seldepth = if NT::ROOT {
             0
         } else {
-            self.seldepth.max(self.ply as usize)
+            self.seldepth.max(self.ply as Depth)
         };
 
         // Create child pv to pass to the next recursive call to negamax
@@ -146,10 +146,9 @@ impl SearchWorker {
         let tt_entry = tt.get(self.board.key());
         let mut tt_move = Move::NONE;
         let mut tt_capture = false;
-        let tt_hit = tt_entry.is_some();
-        let mut tt_bound = TTBound::None;
-        let mut tt_depth = 0;
-        let mut tt_value = Eval::ZERO;
+        let mut tt_bound: TTBound = TTBound::None;
+        let mut tt_depth: Depth = 0;
+        let mut tt_value: Eval = Eval::ZERO;
         // --- Hash Table Cut ---
         // If a previously stored value can be trusted (higher depth),
         // then it would be safe to cut the branch and return the stored value
@@ -168,7 +167,7 @@ impl SearchWorker {
             tt_move = tt_entry.best_move;
             tt_capture = self.board.is_capture(tt_move);
             tt_bound = tt_entry.bound;
-            tt_depth = tt_entry.depth as usize;
+            tt_depth = tt_entry.depth as Depth;
         }
 
         // Get the best static evaluation of the position
@@ -201,6 +200,27 @@ impl SearchWorker {
                 }
             }
         }
+
+        // --- Internal Iterative Deepening ---
+        // If there is currently no best move for this position,
+        // reduce the search depth in hopes to find a best move,
+        // and then search at full depth
+        if NT::PV && !tt_move.is_valid() {
+            depth -= 1;
+        }
+
+        // --- Quiescence search ---
+        if depth <= 0 {
+            return self.quiescence::<PV>(tt, pv, alpha, beta);
+        }
+
+        // // --- Cut Node Pruning ---
+        // // Take the position with a grain of salt if it is a cutnode
+        // // and there doesn't seem to be a good move
+        // if cutnode && depth >= 7 && (!tt_move.is_valid() || tt_bound == TTBound::Upper) {
+        //     depth -= 2;
+        // }
+
         // --- Set up main loop ---
         let mut best_value = -Eval::INFINITY;
         let mut best_move = Move::NONE;
@@ -300,11 +320,7 @@ impl SearchWorker {
                     };
 
                 // Update new depth with new extensions
-                new_depth = if extension >= 0 {
-                    new_depth.saturating_add(extension as usize)
-                } else {
-                    new_depth.saturating_sub((-extension) as usize)
-                };
+                new_depth += extension;
             }
 
             // Make move and update ply, node counters, prefetch hash entry, etc...
@@ -322,12 +338,12 @@ impl SearchWorker {
                 // Calculate dynamic depth reduction
                 let mut r = lmr_base_reduction(depth, move_count);
                 // Increase reductions for moves we think might be bad
-                r += !NT::PV as usize;
-                r += !improving as usize;
-                r += tt_capture as usize;
+                r += !NT::PV as Depth;
+                r += !improving as Depth;
+                r += tt_capture as Depth;
                 // Decrease reductions for moves we think might be good
-                r -= in_check as usize;
-                r -= self.board.in_check() as usize;
+                r -= in_check as Depth;
+                r -= self.board.in_check() as Depth;
                 // We don't want to extend or go into qsearch.
                 // Since we have checked for qsearch, depth is guaranteed to be >= 1.
                 r = r.clamp(1, depth - 1);
@@ -434,6 +450,8 @@ impl SearchWorker {
             } else {
                 TTBound::Upper
             };
+
+            assert!(depth >= 0);
 
             tt.write(
                 self.board.key(),

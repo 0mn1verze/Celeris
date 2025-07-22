@@ -12,7 +12,7 @@ pub use pv::PVLine;
 pub use tt::TT;
 
 use crate::{
-    CaptureHistory, ContinuationTable, Eval, KillerEntry, MainHistory,
+    CaptureHistory, ContinuationTable, Depth, Eval, KillerEntry, MainHistory,
     constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
 };
 use chess::{Move, Piece, Square, board::Board};
@@ -52,12 +52,12 @@ pub(crate) struct SearchWorker {
     thread_id: usize,
 
     // Search Stack
-    stack: [SearchStackEntry; MAX_DEPTH + SEARCH_STACK_OFFSET],
+    stack: [SearchStackEntry; MAX_DEPTH as usize + SEARCH_STACK_OFFSET],
 
     // Search Info
     nodes: u64,
-    pub depth: usize,
-    seldepth: usize,
+    pub depth: Depth,
+    seldepth: Depth,
     ply: u16,
     // Plies from previous null move
     ply_from_null: u16,

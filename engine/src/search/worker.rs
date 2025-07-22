@@ -7,7 +7,8 @@ use chess::{Move, Piece, Square, board::Board};
 use nnue::accumulator::Accumulator;
 
 use crate::{
-    HistoryTable, Interface, MoveBuffer, MoveStage, SearchStackEntry, SearchStats, SearchWorker,
+    Depth, HistoryTable, Interface, MoveBuffer, MoveStage, SearchStackEntry, SearchStats,
+    SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
     eval::{Eval, evaluate_nnue},
     search::{PVLine, tt::TTBound},
@@ -23,7 +24,7 @@ impl SearchWorker {
             thread_id,
             eval: -Eval::INFINITY,
             board: Board::default(),
-            stack: [SearchStackEntry::default(); MAX_DEPTH + SEARCH_STACK_OFFSET],
+            stack: [SearchStackEntry::default(); MAX_DEPTH as usize + SEARCH_STACK_OFFSET],
             nodes: 0,
             seldepth: 0,
             depth: 0,
@@ -183,7 +184,7 @@ impl SearchWorker {
     pub(super) fn update_search_stats(
         &mut self,
         best_move: Move,
-        depth: usize,
+        depth: Depth,
         caps_tried: &MoveBuffer,
         quiets_tried: &MoveBuffer,
     ) {
@@ -273,7 +274,7 @@ impl SearchWorker {
         best_value.is_valid() && self.board.has_non_pawn_material(self.board.stm())
     }
 
-    pub(super) fn can_do_nmp(&self, depth: usize, eval: Eval, beta: Eval) -> bool {
+    pub(super) fn can_do_nmp(&self, depth: Depth, eval: Eval, beta: Eval) -> bool {
         depth >= 2
             && self.ply_from_null > 0
             && eval >= beta
@@ -281,22 +282,22 @@ impl SearchWorker {
             && beta >= -Eval::MATE_BOUND
     }
 
-    pub(super) fn can_do_fp(&self, depth: usize, eval: Eval, beta: Eval, improving: bool) -> bool {
-        let fp_margin = Eval((80 * depth - 60 * improving as usize) as i32);
+    pub(super) fn can_do_fp(&self, depth: Depth, eval: Eval, beta: Eval, improving: bool) -> bool {
+        let fp_margin = Eval(80 * depth - 60 * improving as i32);
         depth <= 8 && eval - fp_margin >= beta
     }
 
-    pub(super) fn can_do_lmp(&self, depth: usize, move_count: usize, improving: bool) -> bool {
-        depth <= 8 && move_count >= (5 + 2 * depth * depth) / (2 - improving as usize)
+    pub(super) fn can_do_lmp(&self, depth: Depth, move_count: usize, improving: bool) -> bool {
+        depth <= 8 && move_count >= ((5 + 2 * depth * depth) / (2 - improving as i32)) as usize
     }
 
-    pub(super) fn can_do_lmr(&self, depth: usize, move_count: usize, is_pv: bool) -> bool {
+    pub(super) fn can_do_lmr(&self, depth: Depth, move_count: usize, is_pv: bool) -> bool {
         depth >= 2 && move_count > 3 + is_pv as usize
     }
 
     pub(super) fn can_do_see_prune(
         &self,
-        depth: usize,
+        depth: Depth,
         best_value: Eval,
         stage: MoveStage,
         move_: Move,
@@ -314,11 +315,10 @@ impl SearchWorker {
 
     pub(super) fn can_do_singular(
         &self,
-        depth: usize,
-        tt_depth: usize,
+        depth: Depth,
+        tt_depth: Depth,
         move_: Move,
         tt_move: Move,
-
         tt_value: Eval,
         tt_bound: TTBound,
     ) -> bool {
