@@ -1,5 +1,5 @@
 use chess::{
-    Bitboard, Colour, Move, MoveFlag, Piece, PieceType, Square,
+    Bitboard, Colour, Move, MoveFlag, Piece, PieceType, Rank, Square,
     board::{Board, bishop_attacks, rook_attacks},
 };
 
@@ -201,6 +201,34 @@ pub fn see(board: &Board, move_: Move, threshold: Eval) -> bool {
     }
 
     stm != board.stm() // Since the loop breaks when the stm has no attackers left, if it's our side then the SEE check should return false (Not favourable exchange)
+}
+
+pub fn move_best_value(board: &Board) -> Eval {
+    let us = board.stm();
+    let them = !us;
+    // Assume the opponent has at least a pawn
+    let mut value = VALUES[PieceType::Pawn.index()];
+
+    // Check for a higher value target
+    for pt in PieceType::iter() {
+        if board.piece_bb(them, pt).is_occupied() {
+            value = VALUES[pt.index()];
+            break;
+        }
+    }
+
+    let promotion_rank = if us == Colour::White {
+        Rank::Rank7.bb()
+    } else {
+        Rank::Rank2.bb()
+    };
+
+    // Check for potential pawn promotion
+    if (board.piece_bb(us, PieceType::Pawn) & promotion_rank).is_occupied() {
+        value += VALUES[PieceType::Queen.index()] - VALUES[PieceType::Pawn.index()];
+    }
+
+    value
 }
 
 #[cfg(test)]

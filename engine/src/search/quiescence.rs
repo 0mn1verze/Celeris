@@ -4,8 +4,10 @@ use crate::{
     Depth, SearchStackEntry, SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH},
     eval::Eval,
+    move_best_value,
     movepick::MovePicker,
     search::PVLine,
+    see,
 };
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
@@ -61,17 +63,23 @@ impl SearchWorker {
         // --- Stand Pat Score ---
         // Get the static evaluation of the current position.
         // This score assumes no further captures are made (the "stand pat" score).
-        // let eval = self.static_eval(in_check, tt_entry);
         let eval = self.static_eval(in_check, tt_entry);
+        // If the static evaluation is better than alpha, update alpha.
+        // This becomes the baseline score we need to beat with captures.
+        alpha = alpha.max(eval);
         // --- Alpha-Beta Pruning based on Stand Pat ---
         // If the static evaluation is already >= beta, the opponent won't allow this position.
         // We can prune immediately, assuming the static eval is a reasonable lower bound.
         if eval >= beta {
             return beta; // Fail-High based on static eval
         }
-        // If the static evaluation is better than alpha, update alpha.
-        // This becomes the baseline score we need to beat with captures.
-        alpha = alpha.max(eval);
+
+        // // --- Delta Pruning ---
+        // // If any possible best move here cannot get us above alpha material wise,
+        // // then we can safely prune the branch
+        // if move_best_value(&self.board).max(Eval(140)) < alpha - eval {
+        //     return eval;
+        // }
 
         // Initialize best_value with stand_pat. We are looking for captures that improve on this.
         let mut best_value = eval;
@@ -86,6 +94,24 @@ impl SearchWorker {
         let mut move_picker = MovePicker::<true>::new(&self.board, tt_move, [Move::NONE; 2]);
 
         while let Some(move_) = move_picker.next(&self.board, &self.stats, &ss_buffer) {
+            // --- QS Pruning ---
+            if !best_value.is_terminal() {
+                let futility = eval + Eval(350);
+
+                // --- Futility Pruning ---
+                // If the move does not win material and the current static eval is pessimistic enough,
+                // then we ignore the move
+                if in_check && futility <= alpha && !see(&self.board, move_, Eval(1)) {
+                    best_value = best_value.max(futility);
+                    continue;
+                }
+
+                // --- SEE Pruning ---
+                if !see(&self.board, move_, Eval(-30)) {
+                    continue;
+                }
+            }
+
             // Make the capture
             self.make_move(tt, move_);
             // Recursive call

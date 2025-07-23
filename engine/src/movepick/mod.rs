@@ -6,7 +6,7 @@ mod see;
 pub use history::*;
 pub(crate) use move_buffer::MoveBuffer;
 pub use movepick::MovePicker;
-pub use see::see;
+pub use see::{move_best_value, see};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum MoveStage {

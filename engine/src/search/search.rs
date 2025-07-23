@@ -205,7 +205,7 @@ impl SearchWorker {
         // If there is currently no best move for this position,
         // reduce the search depth in hopes to find a best move,
         // and then search at full depth
-        if depth >= 7 && (NT::PV || cutnode) && (!tt_move.is_valid() || tt_depth + 4 < depth) {
+        if NT::PV && (!tt_move.is_valid() || tt_depth + 4 < depth) {
             depth -= 1;
         }
 
