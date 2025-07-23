@@ -111,7 +111,7 @@ impl FromStr for TimeControl {
             Some("infinite") => Ok(TimeControl::Infinite),
             Some("depth") => Ok(TimeControl::FixedDepth(parse(&mut tokens)?)),
             Some("nodes") => Ok(TimeControl::FixedNodes(parse(&mut tokens)?)),
-            Some("mate") => Ok(TimeControl::Mate(parse(&mut tokens)?)),
+            Some("mate") => Ok(TimeControl::Mate(parse::<usize>(&mut tokens)? as Depth)),
             Some("movetime") => Ok(TimeControl::FixedTime(parse(&mut tokens)?)),
             // If none of the specific keywords match, attempt to parse as Variable time control.
             _ => Self::parse_variable(&mut s.split_whitespace()),

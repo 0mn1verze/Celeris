@@ -74,12 +74,12 @@ impl SearchWorker {
             return beta; // Fail-High based on static eval
         }
 
-        // // --- Delta Pruning ---
-        // // If any possible best move here cannot get us above alpha material wise,
-        // // then we can safely prune the branch
-        // if move_best_value(&self.board).max(Eval(140)) < alpha - eval {
-        //     return eval;
-        // }
+        // --- Delta Pruning ---
+        // If any possible best move here cannot get us above alpha material wise,
+        // then we can safely prune the branch
+        if move_best_value(&self.board).max(Eval(140)) < alpha - eval {
+            return eval;
+        }
 
         // Initialize best_value with stand_pat. We are looking for captures that improve on this.
         let mut best_value = eval;
