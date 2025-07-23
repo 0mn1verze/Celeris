@@ -106,7 +106,7 @@ impl SearchWorker {
         let singular = excl_move.is_valid();
 
         // --- Quiescence search in base case ---
-        if depth == 0 && !in_check {
+        if depth <= 0 && !in_check {
             return self.quiescence::<NT::Next>(tt, pv, alpha, beta);
         }
 
@@ -205,21 +205,9 @@ impl SearchWorker {
         // If there is currently no best move for this position,
         // reduce the search depth in hopes to find a best move,
         // and then search at full depth
-        if NT::PV && !tt_move.is_valid() {
+        if depth >= 7 && (NT::PV || cutnode) && (!tt_move.is_valid() || tt_depth + 4 < depth) {
             depth -= 1;
         }
-
-        // --- Quiescence search ---
-        if depth <= 0 {
-            return self.quiescence::<PV>(tt, pv, alpha, beta);
-        }
-
-        // // --- Cut Node Pruning ---
-        // // Take the position with a grain of salt if it is a cutnode
-        // // and there doesn't seem to be a good move
-        // if cutnode && depth >= 7 && (!tt_move.is_valid() || tt_bound == TTBound::Upper) {
-        //     depth -= 2;
-        // }
 
         // --- Set up main loop ---
         let mut best_value = -Eval::INFINITY;
