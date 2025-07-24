@@ -222,7 +222,7 @@ impl SearchWorker {
                 tt_eval
             };
 
-            eval = self.adjust_eval(eval);
+            // eval = self.adjust_eval(eval);
 
             self.ss_mut().eval = eval;
 
@@ -234,7 +234,8 @@ impl SearchWorker {
             }
         } else {
             let eval = self.evaluate();
-            self.ss_mut().eval = self.adjust_eval(eval);
+            // self.ss_mut().eval = self.adjust_eval(eval);
+            self.ss_mut().eval = eval;
 
             self.ss().eval
         }

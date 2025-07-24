@@ -25,7 +25,7 @@ impl Eval {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.abs() <= Eval::INFINITY
+        self.abs() < Eval::INFINITY
     }
 
     pub fn is_terminal(&self) -> bool {

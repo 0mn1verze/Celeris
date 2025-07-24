@@ -48,9 +48,12 @@ impl SearchWorker {
         // --- Hash table probe ---
         let tt_entry = tt.get(self.board.key());
         let mut tt_move = Move::NONE;
+        let mut tt_eval = Eval::INFINITY;
+        let mut tt_value = Eval::INFINITY;
+        let mut tt_bound = TTBound::None;
 
         if let Some(tt_entry) = tt_entry {
-            let tt_value = tt_entry.value.from_tt(self.ply);
+            tt_value = tt_entry.value.from_tt(self.ply);
 
             if !NT::PV && can_use_tt_value(tt_entry.bound, tt_value, alpha, beta) {
                 return tt_value;
@@ -58,31 +61,66 @@ impl SearchWorker {
 
             // Update best move from hash table
             tt_move = tt_entry.best_move;
+            tt_bound = tt_entry.bound;
+            tt_eval = tt_entry.eval;
         }
 
+        let mut best_value;
+        let raw_value;
+        let futility;
         // --- Stand Pat Score ---
         // Get the static evaluation of the current position.
         // This score assumes no further captures are made (the "stand pat" score).
-        let eval = self.static_eval(in_check, tt_entry);
-        // If the static evaluation is better than alpha, update alpha.
-        // This becomes the baseline score we need to beat with captures.
-        alpha = alpha.max(eval);
-        // --- Alpha-Beta Pruning based on Stand Pat ---
-        // If the static evaluation is already >= beta, the opponent won't allow this position.
-        // We can prune immediately, assuming the static eval is a reasonable lower bound.
-        if eval >= beta {
-            return beta; // Fail-High based on static eval
-        }
+        // let eval = self.static_eval(in_check, tt_entry);
+        if in_check {
+            // When in check, we must search all evasions - can't stand pat
+            best_value = -Eval::INFINITY;
+            raw_value = -Eval::INFINITY;
+            futility = -Eval::INFINITY;
+        } else {
+            // Stand pat evaluation: assume we can choose not to make any move.
+            raw_value = if tt_eval.is_valid() {
+                tt_eval
+            } else {
+                self.evaluate()
+            };
+
+            // Adjust evaluation with correction history.
+            best_value = self.adjust_eval(raw_value);
+
+            self.ss_mut().eval = best_value;
+
+            // Futility pruning threshold for qsearch.
+            // If our position + a reasonable bonus still can't reach alpha,
+            // we can prune captures that don't improve the position significantly.
+            futility = best_value + Eval(350);
+
+            // Use TT score if it's more accurate than static eval.
+            if tt_value.is_valid() && can_use_tt_value(tt_bound, tt_value, alpha, beta) {
+                best_value = tt_value
+            }
+
+            // Beta cutoff from stand pat.
+            // If our current position is already good enough to cause a beta cutoff,
+            // we don't need to search any captures.
+            if best_value >= beta {
+                // Return average of static eval and beta to avoid returning
+                // values that are too far from the "true" evaluation.
+                return (best_value + beta) / Eval(2);
+            }
+
+            // Raise alpha if our stand pat evaluation is better.
+            alpha = alpha.max(best_value);
+        };
 
         // --- Delta Pruning ---
         // If any possible best move here cannot get us above alpha material wise,
         // then we can safely prune the branch
-        if move_best_value(&self.board).max(Eval(150)) < alpha - eval {
-            return eval;
+        if move_best_value(&self.board).max(Eval(150)) < alpha - self.ss_mut().eval {
+            return self.ss_mut().eval;
         }
 
         // Initialize best_value with stand_pat. We are looking for captures that improve on this.
-        let mut best_value = eval;
         let mut child_pv = PVLine::default();
         let mut best_move = Move::NONE;
 
@@ -96,8 +134,6 @@ impl SearchWorker {
         while let Some(move_) = move_picker.next(&self.board, &self.stats, &ss_buffer) {
             // --- QS Pruning ---
             if !best_value.is_terminal() {
-                let futility = eval + Eval(350);
-
                 // --- Futility Pruning ---
                 // If the move does not win material and the current static eval is pessimistic enough,
                 // then we ignore the move
@@ -171,7 +207,7 @@ impl SearchWorker {
             self.ply,
             0,
             best_move,
-            eval,
+            raw_value,
             best_value,
         );
 

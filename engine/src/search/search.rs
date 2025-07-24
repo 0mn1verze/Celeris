@@ -141,7 +141,8 @@ impl SearchWorker {
         let mut tt_capture = false;
         let mut tt_bound: TTBound = TTBound::None;
         let mut tt_depth: Depth = 0;
-        let mut tt_value: Eval = Eval::ZERO;
+        let mut tt_value: Eval = Eval::INFINITY;
+        let mut tt_eval: Eval = Eval::INFINITY;
         // --- Hash Table Cut ---
         // If a previously stored value can be trusted (higher depth),
         // then it would be safe to cut the branch and return the stored value
@@ -163,8 +164,28 @@ impl SearchWorker {
             tt_depth = tt_entry.depth as Depth;
         }
 
+        let mut raw_value = -Eval::INFINITY;
         // Get the best static evaluation of the position
-        let eval = self.static_eval(in_check, tt_entry);
+        // let eval = self.static_eval(in_check, tt_entry);
+        let eval = if in_check {
+            self.ss_mut().eval = -Eval::INFINITY;
+            -Eval::INFINITY
+        // In singular search, take the value of the position that the singular search came from
+        } else if singular {
+            raw_value = self.ss().eval;
+            self.ss().eval
+        } else {
+            raw_value = if tt_eval.is_valid() {tt_eval} else {self.evaluate()};
+
+            let mut eval = self.adjust_eval(raw_value);
+            self.ss_mut().eval = eval;
+
+            if tt_value.is_valid() && can_use_tt_value(tt_bound, tt_value, alpha, beta) {
+                eval = tt_value
+            }
+
+            eval
+        };
         // Set up flags to record trends of the game
         let improving = self.improving();
         let opp_worsening = self.opp_worsening();
@@ -198,7 +219,7 @@ impl SearchWorker {
         // If there is currently no best move for this position,
         // reduce the search depth in hopes to find a best move,
         // and then search at full depth
-        if depth >= 2 && (NT::PV || cutnode) && (!tt_move.is_valid() || tt_depth + 4 < depth) {
+        if NT::PV && (!tt_move.is_valid() || tt_depth + 4 < depth) {
             depth -= 1;
         }
 
@@ -438,7 +459,7 @@ impl SearchWorker {
                 self.ply,
                 depth as u8,
                 best_move,
-                eval,
+                raw_value,
                 best_value,
             );
         }
