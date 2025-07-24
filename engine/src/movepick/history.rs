@@ -1,6 +1,9 @@
 use chess::{Colour, Move, Piece, Square, board::Board};
 
-use crate::{constants::MAX_MAIN_HISTORY, eval::Eval};
+use crate::{
+    constants::{CORR_HIST_MAX, CORR_HIST_SIZE, MAX_MAIN_HISTORY},
+    eval::Eval,
+};
 
 /******************************************\
 |==========================================|
@@ -275,3 +278,29 @@ impl ContinuationTable {
         }
     }
 }
+
+/******************************************\
+|==========================================|
+|            Correction History            |
+|==========================================|
+\******************************************/
+
+type CorrHistoryEntry = Entry<CORR_HIST_MAX>;
+
+define_history!(CorrHistory, CorrHistoryEntry, [CORR_HIST_SIZE, Colour::NUM]);
+
+impl_history_probe!(CorrHistory, CorrHistoryEntry, [key, stm]);
+
+impl CorrHistory {
+    /// Helper function to get the indices for the continuation table.
+    #[inline(always)]
+    fn get_indices(board: &Board, move_: Move) -> (usize, usize) {
+        let _ = move_;
+        (
+            board.pawn_key() as usize % CORR_HIST_SIZE,
+            board.stm().index(),
+        )
+    }
+}
+
+impl Interface<CorrHistoryEntry> for CorrHistory {}

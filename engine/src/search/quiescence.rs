@@ -10,7 +10,7 @@ use crate::{
     see,
 };
 
-use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
+use super::{NodeType, TT, helper::*, tt::TTBound};
 
 impl SearchWorker {
     pub(super) fn quiescence<NT: NodeType>(
@@ -77,7 +77,7 @@ impl SearchWorker {
         // --- Delta Pruning ---
         // If any possible best move here cannot get us above alpha material wise,
         // then we can safely prune the branch
-        if move_best_value(&self.board).max(Eval(140)) < alpha - eval {
+        if move_best_value(&self.board).max(Eval(150)) < alpha - eval {
             return eval;
         }
 
@@ -107,6 +107,9 @@ impl SearchWorker {
                 }
 
                 // --- SEE Pruning ---
+                // If the move is bad enough that it loses material,
+                // even when giving an advantage threshold,
+                // then ignore the move
                 if !see(&self.board, move_, Eval(-30)) {
                     continue;
                 }

@@ -1,12 +1,7 @@
 use chess::Move;
 
 use crate::{
-    Depth, MoveBuffer, MoveStage, PV, SearchStackEntry, SearchWorker,
-    constants::{CONT_HIST_SIZE, MAX_DEPTH},
-    eval::Eval,
-    movepick::MovePicker,
-    search::PVLine,
-    see,
+    constants::{CONT_HIST_SIZE, MAX_DEPTH}, eval::Eval, movepick::MovePicker, search::PVLine, see, Depth, Interface, MoveBuffer, MoveStage, SearchStackEntry, SearchWorker, PV
 };
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
@@ -93,8 +88,6 @@ impl SearchWorker {
         mut depth: Depth,
         cutnode: bool,
     ) -> Eval {
-        let us = self.board.stm();
-
         pv.clear();
 
         if self.should_stop_search() {
@@ -205,7 +198,7 @@ impl SearchWorker {
         // If there is currently no best move for this position,
         // reduce the search depth in hopes to find a best move,
         // and then search at full depth
-        if NT::PV && (!tt_move.is_valid() || tt_depth + 4 < depth) {
+        if depth >= 2 && (NT::PV || cutnode) && (!tt_move.is_valid() || tt_depth + 4 < depth) {
             depth -= 1;
         }
 
@@ -236,7 +229,7 @@ impl SearchWorker {
             // Move flags
             let is_capture = move_.is_capture();
             let is_promotion = move_.is_promotion();
-            // New depth
+            // New depthw
             let mut new_depth = depth.max(1) - 1;
 
             // --- Quiet Move Pruning ---
@@ -439,8 +432,6 @@ impl SearchWorker {
                 TTBound::Upper
             };
 
-            assert!(depth >= 0);
-
             tt.write(
                 self.board.key(),
                 bound,
@@ -450,6 +441,20 @@ impl SearchWorker {
                 eval,
                 best_value,
             );
+        }
+
+        // --- Save Correction History ---
+        // If the position is not tactical, save the eval difference
+        // between the static eval and the actual eval for reference
+        if !in_check
+            && !(best_move.is_valid() && best_move.is_capture())
+            // negative correlation and no fail high, move is actually worse but is still worth looking at
+            && (best_value < eval && best_value < beta) 
+            // positive correlation and no fail low, move is actually better and could be a best move
+            && (best_value > eval && best_move.is_valid())
+        {
+            let bonus = correction_bonus(best_value, eval, depth);
+            self.stats.crt.update(&self.board, best_move, bonus);
         }
 
         best_value

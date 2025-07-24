@@ -7,7 +7,7 @@ pub mod constants {
     // Import necessary types for constants.
     use chess::{PieceType, board::MAX_MOVES};
 
-    use crate::Depth;
+    use crate::{Depth, Eval};
 
     pub const NAME: &str = "Celeris";
     pub const VERSION: &str = "0.0.1";
@@ -27,6 +27,10 @@ pub mod constants {
     pub const MAX_MAIN_HISTORY: i16 = 16384;
     pub const MOVE_BUFFER_MAX: usize = 32;
     pub const CONT_HIST_SIZE: usize = SEARCH_STACK_OFFSET;
+
+    // Correction history size
+    pub const CORR_HIST_SIZE: usize = 32768;
+    pub const CORR_HIST_MAX: i16 = 1024;
     /// The value of the victim we are capturing
     pub const MVV: [i32; PieceType::NUM] = [0, 2400, 2400, 4800, 9600, 0];
 }

@@ -94,10 +94,6 @@ impl SearchWorker {
         self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
     }
 
-    pub(super) fn ss_at_mut(&mut self, offset: usize) -> &mut SearchStackEntry {
-        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
-    }
-
     pub(super) fn ss_look_ahead(&mut self, offset: usize) -> &mut SearchStackEntry {
         &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET + offset]
     }
@@ -220,11 +216,13 @@ impl SearchWorker {
             let tt_eval = tt_entry.eval;
             let tt_value = tt_entry.value.from_tt(self.ply);
 
-            let eval = if tt_eval.abs() >= Eval::INFINITY {
+            let mut eval = if tt_eval.abs() >= Eval::INFINITY {
                 self.evaluate()
             } else {
                 tt_eval
             };
+
+            eval = self.adjust_eval(eval);
 
             self.ss_mut().eval = eval;
 
@@ -235,11 +233,21 @@ impl SearchWorker {
                 eval
             }
         } else {
-            // self.ss_mut().eval = evaluate_nnue(&self.board, &mut self.nnue);
-            self.ss_mut().eval = self.evaluate();
+            let eval = self.evaluate();
+            self.ss_mut().eval = self.adjust_eval(eval);
 
             self.ss().eval
         }
+    }
+
+    pub(super) fn adjust_eval(&mut self, mut v: Eval) -> Eval {
+        // Scale down the eval if we are shuffling pieces (more likely to be a draw)
+        v = v * Eval(200 - self.board.half_moves() as i32) / Eval(200);
+
+        // Add correction history
+        v += self.stats.crt.get(&self.board, Move::NONE);
+
+        v.clamp(-Eval::MATE, Eval::MATE)
     }
 
     pub(super) fn evaluate(&mut self) -> Eval {
@@ -259,14 +267,6 @@ impl SearchWorker {
             self.ss().eval > -self.ss_at(1).eval
         } else {
             false
-        }
-    }
-
-    pub(super) fn terminal_score(&self, in_check: bool) -> Eval {
-        if in_check {
-            Eval::mated_in(self.ply)
-        } else {
-            Eval::DRAW
         }
     }
 

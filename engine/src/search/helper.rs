@@ -1,5 +1,5 @@
 use super::tt::TTBound;
-use crate::{Depth, Eval, tunables::*};
+use crate::{Depth, Eval, constants::CORR_HIST_MAX, tunables::*};
 
 pub(crate) fn lmr_base_reduction(depth: Depth, move_count: usize) -> Depth {
     if depth == 0 || move_count == 0 {
@@ -32,4 +32,10 @@ pub(crate) fn can_use_tt_value(tt_bound: TTBound, tt_value: Eval, alpha: Eval, b
 
 pub(crate) fn calculate_bonus(depth: Depth) -> i16 {
     (350 * (depth.saturating_sub(1))).min(1600) as i16
+}
+
+pub(crate) fn correction_bonus(best: Eval, static_eval: Eval, depth: Depth) -> i16 {
+    const MAX_DIFF: i32 = CORR_HIST_MAX as i32 / 4;
+
+    ((best - static_eval).0 * depth / 8).clamp(-MAX_DIFF, MAX_DIFF) as i16
 }
