@@ -1,10 +1,10 @@
-# Celeris - [Demo](https://wrong-wallis-celeris-bbabebfc.koyeb.app/)
+# Celeris - [Demo (3000 elo)](https://wrong-wallis-celeris-bbabebfc.koyeb.app/)
 
 A fast chess engine with nnue trained by TheGogy
 
 ## Huge thanks to TheGogy for contributing to this project!
 
-### About 3000 Elo (Around the same strength as Rybka 2.3.2a 64 bit)
+### About 3400 - 3500 Elo
 
 ### Move generation
 * Magic Bitboards ([wiki](https://www.chessprogramming.org/Magic_Bitboards))
@@ -31,5 +31,7 @@ A fast chess engine with nnue trained by TheGogy
 * Principal variation search ([wiki](https://www.chessprogramming.org/Principal_Variation_Search))
 ### Evaluation
 * NNUE evaluation (Train by TheGogy)
+
+### To be updated!
 
 ### Demo link on github main page
