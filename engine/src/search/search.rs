@@ -329,7 +329,7 @@ impl SearchWorker {
                     r -= (mp.stage <= MoveStage::GenQuiets) as Depth;
                 // Different logic for capture moves
                 } else {
-                    r = 3;
+                    r = 1;
                     // Reduce for moves that give check (Tactical)
                     r -= gives_check as Depth;
                 }
