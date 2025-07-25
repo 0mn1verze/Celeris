@@ -9,11 +9,7 @@ use std::{
 
 use chess::{Move, board::Board};
 
-use crate::{
-    TimeControl,
-    search::TT,
-    search::{Clock, SearchWorker},
-};
+use crate::{Clock, TimeControl, search::SearchWorker, search::TT};
 
 pub struct ThreadPool {
     pub main_worker: SearchWorker,

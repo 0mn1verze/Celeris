@@ -1,32 +1,21 @@
-mod clock;
-mod helper;
 mod pv;
 mod quiescence;
 mod search;
+mod stack;
 mod tt;
+mod utils;
 mod worker;
 
-pub use clock::Clock;
 use nnue::accumulator::Accumulator;
 pub use pv::PVLine;
+pub(crate) use stack::{SearchStack, SearchStackEntry};
 pub use tt::TT;
 
 use crate::{
-    CaptureHistory, ContinuationTable, CounterMoveHistory, Depth, Eval, KillerEntry, MainHistory,
-    constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
+    CaptureHistory, Clock, ContinuationTable, CounterMoveHistory, Depth, Eval, KillerEntry,
+    MainHistory,
 };
-use chess::{Move, Piece, Square, board::Board};
-
-#[derive(Debug, Default, Copy, Clone)]
-pub(crate) struct SearchStackEntry {
-    killers: KillerEntry,
-    curr_move: Move,
-    excl_move: Move,
-    moved: Option<Piece>,
-    eval: Eval,
-    in_check: bool,
-    ply_from_null: u16,
-}
+use chess::board::Board;
 
 #[derive(Debug, Clone, Default)]
 pub struct SearchStats {
@@ -34,12 +23,6 @@ pub struct SearchStats {
     pub cht: CaptureHistory,
     pub ct: Box<ContinuationTable>,
     pub cmt: CounterMoveHistory,
-}
-
-impl SearchStackEntry {
-    pub(crate) fn piece_to(&self) -> (Piece, Square) {
-        unsafe { (self.moved.unwrap_unchecked(), self.curr_move.to()) }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -51,9 +34,6 @@ pub(crate) struct SearchWorker {
 
     thread_id: usize,
 
-    // Search Stack
-    stack: [SearchStackEntry; MAX_DEPTH as usize + SEARCH_STACK_OFFSET],
-
     // Search Info
     nodes: u64,
     pub depth: Depth,
@@ -62,7 +42,9 @@ pub(crate) struct SearchWorker {
     // Plies from previous null move
     ply_from_null: u16,
 
-    // Move orderin statistics
+    // Search Stack
+    stack: SearchStack,
+    // Move ordering statistics
     stats: SearchStats,
 
     // Search results

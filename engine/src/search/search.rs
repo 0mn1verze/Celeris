@@ -1,11 +1,11 @@
 use chess::{Move, PieceType};
 
 use crate::{
-    Depth, MoveBuffer, MoveStage, SearchWorker, constants::MAX_DEPTH, eval::Eval,
-    movepick::MovePicker, search::PVLine,
+    Depth, MoveStage, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
+    search::PVLine, utils::MoveBuffer,
 };
 
-use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
+use super::{NodeType, NonPV, Root, TT, tt::TTBound, utils::*};
 
 impl SearchWorker {
     pub fn iterative_deepening(&mut self, tt: &TT) {
@@ -96,7 +96,7 @@ impl SearchWorker {
         }
 
         let in_check = self.board.in_check();
-        let excl_move = self.ss().excl_move;
+        let excl_move = self.ss_at(0).excl_move;
         let singular = excl_move.is_valid();
 
         // --- Quiescence search in base case ---
@@ -211,9 +211,9 @@ impl SearchWorker {
         let mut quiets_tried = MoveBuffer::default();
         let mut move_count = 0;
         // Clear child killer moves
-        self.ss_look_ahead(2).killers.clear();
+        self.ss_at(-2).killers.clear();
         // Get killer and counter moves
-        let killers = self.ss().killers.get();
+        let killers = self.stack.at(self.ply, 0).killers.get();
         let counter: Move = self.stats.cmt.get(&self.board, self.ss_at(1).curr_move);
         // Create search stack buffer for continuation history lookup
         let ss_buffer = [self.ss_at(1), self.ss_at(2)];
@@ -257,7 +257,7 @@ impl SearchWorker {
                 let singular_beta = (tt_value - Eval(depth as i32)).max(-Eval::MATE);
 
                 // Tell child nodes that we are in a singular search
-                self.ss_mut().excl_move = move_;
+                self.ss_at_mut(0).excl_move = move_;
                 // Search the rest of the moves at a reduced depth.
                 let value = self.nw_search(
                     tt,
@@ -266,7 +266,7 @@ impl SearchWorker {
                     new_depth / 2,
                     cutnode,
                 );
-                self.ss_mut().excl_move = Move::NONE;
+                self.ss_at_mut(0).excl_move = Move::NONE;
 
                 // --- Multi Cut Pruning ---
                 // if the only move is even better than beta then we can prune it
@@ -306,7 +306,7 @@ impl SearchWorker {
             // Move flags
             let is_capture = move_.is_capture();
             let is_promotion = move_.is_promotion();
-            let moved_piece = unsafe { self.ss().moved.unwrap_unchecked() };
+            let moved_piece = unsafe { self.ss_at(0).moved.unwrap_unchecked() };
             let gives_check = self.board.in_check();
             // Remember previous node count
             let start_nodes = self.nodes;
@@ -411,7 +411,7 @@ impl SearchWorker {
         }
 
         // Update search stack in check flag
-        self.ss_mut().in_check = in_check;
+        self.ss_at_mut(0).in_check = in_check;
 
         // If move count is 0, it is either a stalemate or a mate in self.ply
         if move_count == 0 {

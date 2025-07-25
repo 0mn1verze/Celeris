@@ -1,10 +1,9 @@
 mod history;
-mod move_buffer;
 mod movepick;
 mod see;
 
 pub use history::*;
-pub(crate) use move_buffer::MoveBuffer;
+
 pub use movepick::MovePicker;
 pub use see::{move_best_value, see};
 
