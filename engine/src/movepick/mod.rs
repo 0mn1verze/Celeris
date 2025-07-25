@@ -13,6 +13,7 @@ pub enum MoveStage {
     TTMove,
     GenCaptures,
     GoodCaptures,
+    CounterMove,
     Killer1,
     Killer2,
     GenQuiets,

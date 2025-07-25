@@ -11,7 +11,7 @@ use crate::{
     search::SearchStats,
 };
 
-use super::{Entry, MoveStage, see::see};
+use super::{MoveStage, see::see};
 
 pub struct MovePicker<const TACTICAL: bool> {
     pub stage: MoveStage,
@@ -19,7 +19,7 @@ pub struct MovePicker<const TACTICAL: bool> {
 
     tt_move: Move,
     killers: [Move; 2],
-    // list: ScoredMoveList,
+    counter: Move,
 
     // Scored move list items
     move_list: MoveList,
@@ -35,7 +35,12 @@ fn captured_value(captured: PieceType) -> i32 {
 }
 
 impl<const TACTICAL: bool> MovePicker<TACTICAL> {
-    pub fn new(board: &Board, mut tt_move: Move, mut killers: [Move; 2]) -> Self {
+    pub fn new(
+        board: &Board,
+        mut tt_move: Move,
+        mut killers: [Move; 2],
+        mut counter: Move,
+    ) -> Self {
         let in_check = board.in_check();
 
         if TACTICAL && !in_check && board.is_capture(tt_move) {
@@ -52,11 +57,17 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
             killers[1] = Move::NONE;
         }
 
+        // A valid counter must be legal and a non capture
+        if !counter.is_valid() || !board.is_legal(counter) {
+            counter = Move::NONE;
+        }
+
         Self {
             stage: MoveStage::TTMove,
             skip_quiets: !in_check && TACTICAL,
             tt_move,
             killers,
+            counter,
             move_list: MoveList::new(),
             scores: [0; 256],
             index: 0,
@@ -182,8 +193,10 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
         ss_buffer: &[SearchStackEntry; CONT_HIST_SIZE],
     ) -> Option<Move> {
         let killers = self.killers;
+        let counter = self.counter;
         let cap_pred = |_| true;
-        let quiet_pred = |move_: Move| move_ != killers[0] && move_ != killers[1];
+        let quiet_pred =
+            |move_: Move| move_ != killers[0] && move_ != killers[1] && move_ != counter;
 
         match self.stage {
             MoveStage::TTMove => {
@@ -207,8 +220,16 @@ impl<const TACTICAL: bool> MovePicker<TACTICAL> {
                         self.index = self.bad_cap_start;
                         MoveStage::BadCaptures
                     } else {
-                        MoveStage::Killer1
+                        MoveStage::CounterMove
                     };
+                    self.next(board, stats, ss_buffer)
+                }
+            }
+            MoveStage::CounterMove => {
+                self.stage = MoveStage::Killer1;
+                if !self.skip_quiets && self.counter.is_valid() && self.counter != self.tt_move {
+                    Some(self.counter)
+                } else {
                     self.next(board, stats, ss_buffer)
                 }
             }
@@ -325,7 +346,7 @@ mod tests {
         }
 
         let mut move_picker =
-            MovePicker::<false>::new(&board, Move::NONE, [Move::NONE, Move::NONE]);
+            MovePicker::<false>::new(&board, Move::NONE, [Move::NONE, Move::NONE], Move::NONE);
         let search_stats = SearchStats::default();
 
         let ss_buffer = [SearchStackEntry::default(); CONT_HIST_SIZE];

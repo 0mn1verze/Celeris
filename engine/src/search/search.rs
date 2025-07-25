@@ -1,12 +1,8 @@
 use chess::Move;
 
 use crate::{
-    Depth, MoveBuffer, MoveStage, PV, SearchStackEntry, SearchWorker,
-    constants::{CONT_HIST_SIZE, MAX_DEPTH},
-    eval::Eval,
-    movepick::MovePicker,
+    Depth, MoveBuffer, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
     search::PVLine,
-    see,
 };
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
@@ -93,8 +89,6 @@ impl SearchWorker {
         mut depth: Depth,
         cutnode: bool,
     ) -> Eval {
-        let us = self.board.stm();
-
         pv.clear();
 
         if self.should_stop_search() {
@@ -147,7 +141,7 @@ impl SearchWorker {
         let mut tt_move = Move::NONE;
         let mut tt_capture = false;
         let mut tt_bound: TTBound = TTBound::None;
-        let mut tt_depth: Depth = 0;
+        let mut tt_depth: Depth = -1;
         let mut tt_value: Eval = Eval::ZERO;
         // --- Hash Table Cut ---
         // If a previously stored value can be trusted (higher depth),
@@ -174,7 +168,7 @@ impl SearchWorker {
         let eval = self.static_eval(in_check, tt_entry);
         // Set up flags to record trends of the game
         let improving = self.improving();
-        let opp_worsening = self.opp_worsening();
+        // let opp_worsening = self.opp_worsening();
 
         // --- Pruning ---
         if !NT::PV && !in_check && !singular {
@@ -218,12 +212,13 @@ impl SearchWorker {
         let mut move_count = 0;
         // Clear child killer moves
         self.ss_look_ahead(2).killers.clear();
-        // Get killer moves
+        // Get killer and counter moves
         let killers = self.ss().killers.get();
+        let counter: Move = self.stats.cmt.get(&self.board, self.ss_at(1).curr_move);
         // Create search stack buffer for continuation history lookup
         let ss_buffer = [self.ss_at(1), self.ss_at(2)];
         // Initialise move picker
-        let mut mp = MovePicker::<false>::new(&self.board, tt_move, killers);
+        let mut mp = MovePicker::<false>::new(&self.board, tt_move, killers, counter);
         // --- Main Loop ---
         while let Some(move_) = mp.next(&self.board, &self.stats, &ss_buffer) {
             // Skip excluded move
@@ -234,8 +229,8 @@ impl SearchWorker {
             // Update number of moves searched in this node
             move_count += 1;
             // Move flags
-            let is_capture = move_.is_capture();
-            let is_promotion = move_.is_promotion();
+            // let is_capture = move_.is_capture();
+            // let is_promotion = move_.is_promotion();
             // New depth
             let mut new_depth = depth.max(1) - 1;
 
@@ -284,15 +279,13 @@ impl SearchWorker {
 
                 // If no other move can reach the value of the tt_move (best_move),
                 // then extend this move to check if it is really the only move
+                let triple_extend = value < singular_beta - Eval(50);
+                let double_extend = value < singular_beta - Eval(25);
                 let extension =
                     // If a null window search indicated that all the other moves are a lot worse,
                     // then this move is very promising
-                    if value < singular_beta - Eval(50) {
-                        3
-                    } else if value < singular_beta - Eval(25) {
-                        2
-                    } else if value < singular_beta {
-                        1
+                    if value < singular_beta {
+                        1 + double_extend as Depth + triple_extend as Depth
                     // Opposite Effect: Move is too good to be true, so we try to ignore it safely
                     } else if tt_value >= beta {
                         -3

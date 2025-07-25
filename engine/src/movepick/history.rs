@@ -30,6 +30,53 @@ impl KillerEntry {
     }
 }
 
+/******************************************\
+|==========================================|
+|           CounterMove History            |
+|==========================================|
+\******************************************/
+
+#[derive(Debug, Clone, Copy)]
+pub struct CounterMoveHistory {
+    history: [[Move; Square::NUM]; Colour::NUM]
+}
+
+impl Default for CounterMoveHistory {
+    fn default() -> Self {
+        Self {
+            history: [[Move::NONE; Square::NUM]; Colour::NUM]
+        }
+    }
+}
+
+impl CounterMoveHistory {
+    fn get_indicies(&self, board: &Board, move_: Move) -> (usize, usize) {
+        (board.stm().index(), move_.to().index())
+    }
+
+
+    pub fn get(&self, board: &Board, move_: Move) -> Move {
+        let (colour, to) = self.get_indicies(board, move_);
+        self.history[colour][to]
+    }
+
+    pub fn update(&mut self, board: &Board, prev_move: Move, counter: Move) {
+        let (colour, to) = self.get_indicies(board, prev_move);
+        self.history[colour][to] = counter;
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+}
+
+
+/******************************************\
+|==========================================|
+|            History Heuristics            |
+|==========================================|
+\******************************************/
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Entry<const MAX: i16> {
     entry: Eval,

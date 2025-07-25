@@ -10,7 +10,7 @@ use crate::{
     see,
 };
 
-use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
+use super::{NodeType, TT, helper::*, tt::TTBound};
 
 impl SearchWorker {
     pub(super) fn quiescence<NT: NodeType>(
@@ -64,6 +64,11 @@ impl SearchWorker {
         // Get the static evaluation of the current position.
         // This score assumes no further captures are made (the "stand pat" score).
         let eval = self.static_eval(in_check, tt_entry);
+        let futility = if in_check {
+            -Eval::INFINITY
+        } else {
+            eval + Eval(350)
+        };
         // If the static evaluation is better than alpha, update alpha.
         // This becomes the baseline score we need to beat with captures.
         alpha = alpha.max(eval);
@@ -91,13 +96,12 @@ impl SearchWorker {
         let ss_buffer = [SearchStackEntry::default(); CONT_HIST_SIZE];
 
         // The generic parameter 'true' tells MovePicker to skip quiet moves.
-        let mut move_picker = MovePicker::<true>::new(&self.board, tt_move, [Move::NONE; 2]);
+        let mut move_picker =
+            MovePicker::<true>::new(&self.board, tt_move, [Move::NONE; 2], Move::NONE);
 
         while let Some(move_) = move_picker.next(&self.board, &self.stats, &ss_buffer) {
             // --- QS Pruning ---
             if !best_value.is_terminal() {
-                let futility = eval + Eval(350);
-
                 // --- Futility Pruning ---
                 // If the move does not win material and the current static eval is pessimistic enough,
                 // then we ignore the move

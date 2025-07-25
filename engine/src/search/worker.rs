@@ -45,6 +45,7 @@ impl SearchWorker {
         self.stats.ht.clear();
         self.stats.cht.clear();
         self.stats.ct.clear();
+        self.stats.cmt.clear();
     }
 
     pub fn prepare_search(&mut self) {
@@ -94,9 +95,9 @@ impl SearchWorker {
         self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
     }
 
-    pub(super) fn ss_at_mut(&mut self, offset: usize) -> &mut SearchStackEntry {
-        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
-    }
+    // pub(super) fn ss_at_mut(&mut self, offset: usize) -> &mut SearchStackEntry {
+    //     &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
+    // }
 
     pub(super) fn ss_look_ahead(&mut self, offset: usize) -> &mut SearchStackEntry {
         &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET + offset]
@@ -196,6 +197,11 @@ impl SearchWorker {
 
             self.update_continuations(best_move, bonus);
 
+            let prev_move = self.ss_at(1).curr_move;
+            if prev_move.is_valid() {
+                self.stats.cmt.update(&self.board, prev_move, best_move);
+            }
+
             for &move_ in quiets_tried {
                 self.stats.ht.update(&self.board, move_, -bonus);
 
@@ -254,21 +260,13 @@ impl SearchWorker {
         }
     }
 
-    pub(super) fn opp_worsening(&self) -> bool {
-        if self.ply >= 1 {
-            self.ss().eval > -self.ss_at(1).eval
-        } else {
-            false
-        }
-    }
-
-    pub(super) fn terminal_score(&self, in_check: bool) -> Eval {
-        if in_check {
-            Eval::mated_in(self.ply)
-        } else {
-            Eval::DRAW
-        }
-    }
+    // pub(super) fn opp_worsening(&self) -> bool {
+    //     if self.ply >= 1 {
+    //         self.ss().eval > -self.ss_at(1).eval
+    //     } else {
+    //         false
+    //     }
+    // }
 
     pub(super) fn can_do_pruning(&self, best_value: Eval) -> bool {
         best_value.is_valid() && self.board.has_non_pawn_material(self.board.stm())
