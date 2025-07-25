@@ -12,7 +12,8 @@ pub use pv::PVLine;
 pub use tt::TT;
 
 use crate::{
-    constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET}, CaptureHistory, ContinuationTable, CounterMoveHistory, Depth, Eval, KillerEntry, MainHistory
+    CaptureHistory, ContinuationTable, CounterMoveHistory, Depth, Eval, KillerEntry, MainHistory,
+    constants::{MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
 };
 use chess::{Move, Piece, Square, board::Board};
 
@@ -23,7 +24,6 @@ pub(crate) struct SearchStackEntry {
     excl_move: Move,
     moved: Option<Piece>,
     eval: Eval,
-    move_count: u8,
     in_check: bool,
     ply_from_null: u16,
 }

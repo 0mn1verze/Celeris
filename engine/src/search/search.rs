@@ -1,8 +1,8 @@
-use chess::Move;
+use chess::{Move, PieceType};
 
 use crate::{
-    Depth, MoveBuffer, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
-    search::PVLine,
+    Depth, MoveBuffer, MoveStage, SearchWorker, constants::MAX_DEPTH, eval::Eval,
+    movepick::MovePicker, search::PVLine,
 };
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
@@ -228,9 +228,6 @@ impl SearchWorker {
 
             // Update number of moves searched in this node
             move_count += 1;
-            // Move flags
-            let is_capture = move_.is_capture();
-            let is_promotion = move_.is_promotion();
             // New depth
             let mut new_depth = depth.max(1) - 1;
 
@@ -306,32 +303,42 @@ impl SearchWorker {
 
             // Make move and update ply, node counters, prefetch hash entry, etc...
             self.make_move(tt, move_);
+            // Move flags
+            let is_capture = move_.is_capture();
+            let is_promotion = move_.is_promotion();
+            let moved_piece = unsafe { self.ss().moved.unwrap_unchecked() };
+            let gives_check = self.board.in_check();
             // Remember previous node count
             let start_nodes = self.nodes;
             // Recursive search
-            let mut value = alpha;
+            let mut value = -Eval::INFINITY;
 
             // --- Late Move Reduction ---
             // Search moves that are sufficiently far from the terminal nodes
             // and are not tactical using a reduced depth zero window search
             // to see if it is promising or not.
             let full_search = if self.can_do_lmr(depth, move_count, NT::PV) {
-                // Calculate dynamic depth reduction
-                let mut r = lmr_base_reduction(depth, move_count);
-                // Increase reductions for moves we think might be bad
-                r += !NT::PV as Depth;
-                r += !improving as Depth;
-                r += tt_capture as Depth;
-                // Decrease reductions for moves we think might be good
-                r -= in_check as Depth;
-                r -= self.board.in_check() as Depth;
-                // We don't want to extend or go into qsearch.
-                // Since we have checked for qsearch, depth is guaranteed to be >= 1.
+                let mut r;
+                if !is_capture {
+                    r = lmr_base_reduction(depth, move_count);
+                    // Increase for non PV, non improving (less promising)
+                    r += !NT::PV as Depth + !improving as Depth;
+                    // Increase for evasion (less promising)
+                    r += (in_check && moved_piece.pt() == PieceType::King) as Depth;
+                    // Reduce for killers and counters
+                    r -= (mp.stage <= MoveStage::GenQuiets) as Depth;
+                // Different logic for capture moves
+                } else {
+                    r = 3;
+                    // Reduce for moves that give check (Tactical)
+                    r -= gives_check as Depth;
+                }
+
                 r = r.clamp(1, depth - 1);
 
-                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth - r, false);
+                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth - r, true);
 
-                value > alpha && r > 1
+                value > alpha && r != 1
             } else {
                 !NT::PV || move_count > 1
             };
@@ -403,8 +410,6 @@ impl SearchWorker {
             }
         }
 
-        // Update search stack move count
-        self.ss_mut().move_count = move_count as u8;
         // Update search stack in check flag
         self.ss_mut().in_check = in_check;
 
@@ -423,16 +428,20 @@ impl SearchWorker {
         }
 
         if !singular {
-            // Write to TT, save static eval
+            // If there is a beta cutoff, store the score and
+            // tell later searches that this score is the least we can do in this position
             let bound = if best_value >= beta {
                 TTBound::Lower
+            // If we are in the pv and the best move is valid then it will be useful
+            // to store the exact value of this move
             } else if NT::PV && best_move.is_valid() {
                 TTBound::Exact
+            // Opposite to the beta cutoff case, this position is so bad it causes an alpha cutoff,
+            // then tell later searches that if we already found something better than this score,
+            // we can just ignore this branch entirely
             } else {
                 TTBound::Upper
             };
-
-            assert!(depth >= 0);
 
             tt.write(
                 self.board.key(),
