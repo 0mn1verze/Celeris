@@ -229,8 +229,8 @@ impl SearchWorker {
             // Update number of moves searched in this node
             move_count += 1;
             // Move flags
-            // let is_capture = move_.is_capture();
-            // let is_promotion = move_.is_promotion();
+            let is_capture = move_.is_capture();
+            let is_promotion = move_.is_promotion();
             // New depth
             let mut new_depth = depth.max(1) - 1;
 
