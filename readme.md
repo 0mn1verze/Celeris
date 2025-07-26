@@ -4,7 +4,8 @@ A fast chess engine with nnue trained by TheGogy
 
 ## Huge thanks to TheGogy for contributing to this project!
 
-### CCRL Blitz: 3130 Elo
+### Version 1 CCRL Blitz: 3130 Elo
+### Current Estimate: 3400 Elo
 
 ### Move generation
 * Magic Bitboards ([wiki](https://www.chessprogramming.org/Magic_Bitboards))
