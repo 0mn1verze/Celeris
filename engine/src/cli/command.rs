@@ -1,13 +1,11 @@
 use std::str::{FromStr, SplitWhitespace};
 
 // Import necessary types from the chess crate and the parent module.
-use crate::time::TimeControl;
+use crate::{EngineOption, time::TimeControl};
 use chess::{
     Move, MoveFlag,
     board::{Board, LegalGen, MoveList},
 };
-
-use super::options::EngineOption;
 
 #[derive(Debug, PartialEq, Eq)]
 /// Represents commands that can be sent to the chess engine, primarily following the UCI protocol.

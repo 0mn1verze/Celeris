@@ -1,3 +1,4 @@
+pub mod cli;
 mod engine;
 mod eval;
 mod movepick;

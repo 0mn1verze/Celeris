@@ -7,9 +7,10 @@
 //! - [`UCI`]: A struct that handles the Universal Chess Interface (UCI) protocol, allowing interaction
 //!   with standard chess GUIs via standard input/output.
 
+use crate::EngineController;
+
 // Import necessary modules from the parent 'engine' module and standard library.
 use super::Command;
-use super::engine::EngineController;
 use chess::board::movegen::init_magic_tables;
 use std::{
     io::BufRead,

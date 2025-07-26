@@ -2,7 +2,8 @@ use chess::utils::perft_bench;
 #[cfg(feature = "tune")]
 use engine::tunables::spsa_output_txt;
 
-use engine::{Depth, UCI, run_bench};
+use engine::cli::UCI;
+use engine::{Depth, run_bench};
 use std::env::args;
 
 const DEFAULT_CMD_BENCH_DEPTH: Depth = 12;

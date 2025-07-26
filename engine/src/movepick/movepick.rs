@@ -19,7 +19,6 @@ pub struct MovePicker<const TACTICAL: bool> {
 
     tt_move: Move,
     killers: [Move; 2],
-    // list: ScoredMoveList,
 
     // Scored move list items
     move_list: MoveList,

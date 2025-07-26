@@ -1,6 +1,6 @@
 use std::str::{FromStr, SplitWhitespace};
 
-use super::command::UCICommandError;
+use crate::cli::UCICommandError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum EngineOption {
