@@ -4,7 +4,7 @@ A fast chess engine with nnue trained by TheGogy
 
 ## Huge thanks to TheGogy for contributing to this project!
 
-### About 3000 Elo (Around the same strength as Rybka 2.3.2a 64 bit)
+### CCRL Blitz: 3130 Elo
 
 ### Move generation
 * Magic Bitboards ([wiki](https://www.chessprogramming.org/Magic_Bitboards))
