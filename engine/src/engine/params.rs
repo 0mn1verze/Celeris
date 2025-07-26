@@ -1,6 +1,6 @@
 use crate::init_tunables;
 
-pub type Depth = i32;
+pub type Depth = i16;
 
 /// Defines constants used by the engine controller and potentially other parts.
 pub mod constants {
@@ -36,12 +36,12 @@ init_tunables! {
     // value: type = val, min, max, step;
 
     // Late Move Reduction
-    lmr_base: i32 = 768, 500, 2000, 100;
-    lmr_mult: i32 = 2048, 1500, 4000, 100;
+    lmr_base: i16 = 768, 500, 2000, 100;
+    lmr_mult: i16 = 2048, 1500, 4000, 100;
 
     // Null Move Pruning
-    nmp_min: i32 = 4, 2, 6, 1;
-    nmp_div: i32 = 4, 2, 6, 1;
+    nmp_min: i16 = 4, 2, 6, 1;
+    nmp_div: i16 = 4, 2, 6, 1;
 
     // Piece values
     pawn_val:   i32 = 82, 60, 140, 5;

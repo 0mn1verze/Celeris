@@ -7,15 +7,16 @@ use chess::{Move, Piece, Square, board::Board};
 use nnue::accumulator::Accumulator;
 
 use crate::{
-    Depth, HistoryTable, Interface, MoveBuffer, MoveStage, SearchStackEntry, SearchStats,
-    SearchWorker,
-    constants::{CONT_HIST_SIZE, MAX_DEPTH, MIN_DEPTH, SEARCH_STACK_OFFSET},
-    eval::{Eval, evaluate_nnue},
-    search::{PVLine, tt::TTBound},
-    see,
+    HistoryTable, SearchStats, SearchWorker,
+    constants::{MAX_DEPTH, MIN_DEPTH},
+    eval::Eval,
+    search::{
+        PVLine,
+        stack::{SearchStack, SearchStackEntry},
+    },
 };
 
-use super::{Clock, TT, helper::*, tt::TTEntry};
+use super::{Clock, TT};
 
 impl SearchWorker {
     pub fn new(thread_id: usize, stop: Arc<AtomicBool>, nodes: Arc<AtomicU64>) -> Self {
@@ -24,7 +25,7 @@ impl SearchWorker {
             thread_id,
             eval: -Eval::INFINITY,
             board: Board::default(),
-            stack: [SearchStackEntry::default(); MAX_DEPTH as usize + SEARCH_STACK_OFFSET],
+            stack: SearchStack::default(),
             nodes: 0,
             seldepth: 0,
             depth: 0,
@@ -82,27 +83,15 @@ impl SearchWorker {
         should_stop
     }
 
-    pub(super) fn ss(&self) -> SearchStackEntry {
-        self.stack[self.ply as usize + SEARCH_STACK_OFFSET]
+    pub(super) fn ss_at(&self, offset: i8) -> SearchStackEntry {
+        self.stack.at(self.ply, offset)
     }
 
-    pub(super) fn ss_mut(&mut self) -> &mut SearchStackEntry {
-        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET]
+    pub(super) fn ss_at_mut(&mut self, offset: i8) -> &mut SearchStackEntry {
+        self.stack.at_mut(self.ply, offset)
     }
 
-    pub(super) fn ss_at(&self, offset: usize) -> SearchStackEntry {
-        self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
-    }
-
-    pub(super) fn ss_at_mut(&mut self, offset: usize) -> &mut SearchStackEntry {
-        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET - offset]
-    }
-
-    pub(super) fn ss_look_ahead(&mut self, offset: usize) -> &mut SearchStackEntry {
-        &mut self.stack[self.ply as usize + SEARCH_STACK_OFFSET + offset]
-    }
-
-    pub(super) fn piece_to_at(&self, offset: usize) -> (Piece, Square) {
+    pub(super) fn piece_to_at(&self, offset: i8) -> (Piece, Square) {
         self.ss_at(offset).piece_to()
     }
 
@@ -129,9 +118,9 @@ impl SearchWorker {
 
         tt.prefetch(self.board.key());
 
-        self.ss_mut().curr_move = move_;
-        self.ss_mut().moved = self.board.on(move_.to());
-        self.ss_mut().ply_from_null = self.ply_from_null;
+        self.ss_at_mut(0).curr_move = move_;
+        self.ss_at_mut(0).moved = self.board.on(move_.to());
+        self.ss_at_mut(0).ply_from_null = self.ply_from_null;
 
         self.ply += 1;
         self.nodes += 1;
@@ -143,9 +132,9 @@ impl SearchWorker {
 
         tt.prefetch(self.board.key());
 
-        self.ss_mut().curr_move = Move::NULL;
-        self.ss_mut().moved = None;
-        self.ss_mut().ply_from_null = 0;
+        self.ss_at_mut(0).curr_move = Move::NULL;
+        self.ss_at_mut(0).moved = None;
+        self.ss_at_mut(0).ply_from_null = 0;
 
         self.ply += 1;
         self.nodes += 1;
@@ -157,7 +146,7 @@ impl SearchWorker {
 
         self.ply -= 1;
 
-        self.ply_from_null = self.ss().ply_from_null;
+        self.ply_from_null = self.ss_at(0).ply_from_null;
     }
 
     pub(super) fn undo_null_move(&mut self) {
@@ -165,168 +154,6 @@ impl SearchWorker {
 
         self.ply -= 1;
 
-        self.ply_from_null = self.ss().ply_from_null;
-    }
-
-    fn update_continuations(&mut self, move_: Move, bonus: i16) {
-        for offset in 0..CONT_HIST_SIZE {
-            if self.ss_at(offset).curr_move.is_valid() {
-                let (piece, to) = self.piece_to_at(offset);
-
-                self.stats
-                    .ct
-                    .probe_mut(piece, to)
-                    .update(&self.board, move_, bonus);
-            }
-        }
-    }
-
-    pub(super) fn update_search_stats(
-        &mut self,
-        best_move: Move,
-        depth: Depth,
-        caps_tried: &MoveBuffer,
-        quiets_tried: &MoveBuffer,
-    ) {
-        let bonus = calculate_bonus(depth);
-
-        if !best_move.is_capture() {
-            self.ss_mut().killers.update(best_move);
-            self.stats.ht.update(&self.board, best_move, bonus);
-
-            self.update_continuations(best_move, bonus);
-
-            for &move_ in quiets_tried {
-                self.stats.ht.update(&self.board, move_, -bonus);
-
-                self.update_continuations(move_, -bonus);
-            }
-        } else {
-            self.stats.cht.update(&self.board, best_move, bonus);
-        }
-
-        for &move_ in caps_tried {
-            self.stats.cht.update(&self.board, move_, -bonus);
-        }
-    }
-
-    pub(super) fn static_eval(&mut self, in_check: bool, tt_entry: Option<TTEntry>) -> Eval {
-        if in_check {
-            self.ss_mut().eval = -Eval::INFINITY;
-            self.ss().eval
-        } else if self.ss().excl_move.is_valid() {
-            self.ss().eval
-        } else if let Some(tt_entry) = tt_entry {
-            let tt_eval = tt_entry.eval;
-            let tt_value = tt_entry.value.from_tt(self.ply);
-
-            let eval = if tt_eval.abs() >= Eval::INFINITY {
-                self.evaluate()
-            } else {
-                tt_eval
-            };
-
-            self.ss_mut().eval = eval;
-
-            // If we probe the tt_entry and the tt_value is tighter than the eval, then we can use it
-            if can_use_tt_value(tt_entry.bound, tt_value, eval, eval) {
-                tt_value
-            } else {
-                eval
-            }
-        } else {
-            // self.ss_mut().eval = evaluate_nnue(&self.board, &mut self.nnue);
-            self.ss_mut().eval = self.evaluate();
-
-            self.ss().eval
-        }
-    }
-
-    pub(super) fn evaluate(&mut self) -> Eval {
-        evaluate_nnue(&self.board, &mut self.nnue)
-    }
-
-    pub(super) fn improving(&self) -> bool {
-        if self.ply >= 2 {
-            self.ss().eval > self.ss_at(2).eval
-        } else {
-            false
-        }
-    }
-
-    pub(super) fn opp_worsening(&self) -> bool {
-        if self.ply >= 1 {
-            self.ss().eval > -self.ss_at(1).eval
-        } else {
-            false
-        }
-    }
-
-    pub(super) fn terminal_score(&self, in_check: bool) -> Eval {
-        if in_check {
-            Eval::mated_in(self.ply)
-        } else {
-            Eval::DRAW
-        }
-    }
-
-    pub(super) fn can_do_pruning(&self, best_value: Eval) -> bool {
-        best_value.is_valid() && self.board.has_non_pawn_material(self.board.stm())
-    }
-
-    pub(super) fn can_do_nmp(&self, depth: Depth, eval: Eval, beta: Eval) -> bool {
-        depth >= 2
-            && self.ply_from_null > 0
-            && eval >= beta
-            && self.board.has_non_pawn_material(self.board.stm())
-            && beta >= -Eval::MATE_BOUND
-    }
-
-    pub(super) fn can_do_fp(&self, depth: Depth, eval: Eval, beta: Eval, improving: bool) -> bool {
-        let fp_margin = Eval(80 * depth - 60 * improving as i32);
-        depth <= 8 && eval - fp_margin >= beta
-    }
-
-    pub(super) fn can_do_lmp(&self, depth: Depth, move_count: usize, improving: bool) -> bool {
-        depth <= 8 && move_count >= ((5 + 2 * depth * depth) / (2 - improving as i32)) as usize
-    }
-
-    pub(super) fn can_do_lmr(&self, depth: Depth, move_count: usize, is_pv: bool) -> bool {
-        depth >= 2 && move_count > 3 + is_pv as usize
-    }
-
-    pub(super) fn can_do_see_prune(
-        &self,
-        depth: Depth,
-        best_value: Eval,
-        stage: MoveStage,
-        move_: Move,
-    ) -> bool {
-        // Set up SEE margins
-        let d = depth as i32;
-        let see_margins = [Eval(-70 * d), Eval(-20 * d * d)];
-        let is_capture = move_.is_capture();
-
-        !best_value.is_terminal()
-            && depth <= 10
-            && stage > MoveStage::GoodCaptures
-            && !see(&self.board, move_, see_margins[is_capture as usize])
-    }
-
-    pub(super) fn can_do_singular(
-        &self,
-        depth: Depth,
-        tt_depth: Depth,
-        move_: Move,
-        tt_move: Move,
-        tt_value: Eval,
-        tt_bound: TTBound,
-    ) -> bool {
-        depth >= 8
-            && move_ == tt_move
-            && tt_value.is_valid()
-            && !tt_value.is_terminal()
-            && tt_depth >= depth - 3
-            && matches!(tt_bound, TTBound::Lower | TTBound::Exact)
+        self.ply_from_null = self.ss_at(0).ply_from_null;
     }
 }

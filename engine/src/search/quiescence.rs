@@ -1,15 +1,15 @@
 use chess::Move;
 
 use crate::{
-    Depth, SearchStackEntry, SearchWorker,
+    Depth, SearchWorker,
     constants::{CONT_HIST_SIZE, MAX_DEPTH},
     eval::Eval,
     movepick::MovePicker,
-    search::PVLine,
+    search::{PVLine, stack::SearchStackEntry},
     see,
 };
 
-use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
+use super::{NodeType, TT, tt::TTBound, utils::*};
 
 impl SearchWorker {
     pub(super) fn quiescence<NT: NodeType>(
