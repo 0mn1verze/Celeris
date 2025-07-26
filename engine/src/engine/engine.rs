@@ -6,13 +6,13 @@ use chess::{
 };
 
 // Import local modules (evaluation, threading, transposition table).
-use crate::{evaluate_nnue, search::TT, thread::ThreadPool};
+use crate::{evaluate_nnue, search::TT, thread::ThreadPool, time::TimeControl};
 
+use super::Command;
 use super::EngineOption;
 use super::constants::*;
 #[cfg(feature = "tune")]
 use super::tunables::{set_tunable, spsa_output_opts};
-use super::{Command, TimeControl};
 
 /// The core engine controller that manages the board state, search threads, and handles commands.
 ///

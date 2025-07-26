@@ -14,9 +14,10 @@ use crate::{
         PVLine,
         stack::{SearchStack, SearchStackEntry},
     },
+    time::Clock,
 };
 
-use super::{Clock, TT};
+use super::TT;
 
 impl SearchWorker {
     pub fn new(thread_id: usize, stop: Arc<AtomicBool>, nodes: Arc<AtomicU64>) -> Self {

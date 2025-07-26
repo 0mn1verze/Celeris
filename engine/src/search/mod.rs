@@ -1,4 +1,3 @@
-mod clock;
 mod pv;
 mod quiescence;
 mod search;
@@ -7,12 +6,11 @@ mod tt;
 mod utils;
 mod worker;
 
-pub use clock::Clock;
 pub use pv::PVLine;
 pub(crate) use stack::{SearchStack, SearchStackEntry};
 pub use tt::TT;
 
-use crate::{CaptureHistory, ContinuationTable, Depth, Eval, MainHistory};
+use crate::{CaptureHistory, ContinuationTable, Depth, Eval, MainHistory, time::Clock};
 use chess::board::Board;
 use nnue::accumulator::Accumulator;
 

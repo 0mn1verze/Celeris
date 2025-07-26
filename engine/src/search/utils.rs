@@ -2,8 +2,8 @@ use chess::Move;
 
 use super::tt::TTBound;
 use crate::{
-    Depth, Eval, Interface, MoveBuffer, MoveStage, SearchWorker, constants::CONT_HIST_SIZE,
-    evaluate_nnue, search::tt::TTEntry, see, tunables::*,
+    Depth, Eval, Interface, MoveStage, SearchWorker, constants::CONT_HIST_SIZE, evaluate_nnue,
+    search::tt::TTEntry, see, tunables::*, utils::MoveBuffer,
 };
 
 pub(crate) fn lmr_base_reduction(depth: Depth, move_count: usize) -> Depth {

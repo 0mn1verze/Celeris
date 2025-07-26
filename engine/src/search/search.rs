@@ -1,8 +1,8 @@
 use chess::Move;
 
 use crate::{
-    Depth, MoveBuffer, PV, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
-    search::PVLine,
+    Depth, PV, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
+    search::PVLine, utils::MoveBuffer,
 };
 
 use super::{NodeType, NonPV, Root, TT, tt::TTBound, utils::*};
@@ -89,8 +89,6 @@ impl SearchWorker {
         mut depth: Depth,
         cutnode: bool,
     ) -> Eval {
-        let us = self.board.stm();
-
         pv.clear();
 
         if self.should_stop_search() {

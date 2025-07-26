@@ -1,7 +1,7 @@
 use std::str::{FromStr, SplitWhitespace};
 
 // Import necessary types from the chess crate and the parent module.
-use super::TimeControl;
+use crate::time::TimeControl;
 use chess::{
     Move, MoveFlag,
     board::{Board, LegalGen, MoveList},
