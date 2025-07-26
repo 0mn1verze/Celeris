@@ -6,6 +6,7 @@ use crate::{
     eval::Eval,
     movepick::MovePicker,
     search::PVLine,
+    see,
 };
 
 use super::{NodeType, NonPV, Root, TT, helper::*, tt::TTBound};
@@ -61,8 +62,12 @@ impl SearchWorker {
         // --- Stand Pat Score ---
         // Get the static evaluation of the current position.
         // This score assumes no further captures are made (the "stand pat" score).
-        // let eval = self.static_eval(in_check, tt_entry);
         let eval = self.static_eval(in_check, tt_entry);
+        let futility = if in_check {
+            -Eval::INFINITY
+        } else {
+            eval + Eval(-350)
+        };
         // --- Alpha-Beta Pruning based on Stand Pat ---
         // If the static evaluation is already >= beta, the opponent won't allow this position.
         // We can prune immediately, assuming the static eval is a reasonable lower bound.
@@ -79,13 +84,28 @@ impl SearchWorker {
         let mut best_move = Move::NONE;
 
         // --- Generate and Explore Captures Only ---
-
         let ss_buffer = [SearchStackEntry::default(); CONT_HIST_SIZE];
 
         // The generic parameter 'true' tells MovePicker to skip quiet moves.
         let mut move_picker = MovePicker::<true>::new(&self.board, tt_move, [Move::NONE; 2]);
 
         while let Some(move_) = move_picker.next(&self.board, &self.stats, &ss_buffer) {
+            // --- QS Pruning ---
+            if !best_value.is_terminal() {
+                // --- Futility Pruning ---
+                // If the move does not win material and the current static eval is pessimistic enough,
+                // then we ignore the move
+                if in_check && futility <= alpha && !see(&self.board, move_, Eval(1)) {
+                    best_value = best_value.max(futility);
+                    continue;
+                }
+
+                // --- SEE Pruning ---
+                if !see(&self.board, move_, Eval(-30)) {
+                    continue;
+                }
+            }
+
             // Make the capture
             self.make_move(tt, move_);
             // Recursive call
