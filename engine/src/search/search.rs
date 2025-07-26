@@ -1,7 +1,7 @@
-use chess::Move;
+use chess::{Move, PieceType};
 
 use crate::{
-    Depth, PV, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
+    Depth, MoveStage, PV, SearchWorker, constants::MAX_DEPTH, eval::Eval, movepick::MovePicker,
     search::PVLine, utils::MoveBuffer,
 };
 
@@ -208,13 +208,6 @@ impl SearchWorker {
             return self.quiescence::<PV>(tt, pv, alpha, beta);
         }
 
-        // // --- Cut Node Pruning ---
-        // // Take the position with a grain of salt if it is a cutnode
-        // // and there doesn't seem to be a good move
-        // if cutnode && depth >= 7 && (!tt_move.is_valid() || tt_bound == TTBound::Upper) {
-        //     depth -= 2;
-        // }
-
         // --- Set up main loop ---
         let mut best_value = -Eval::INFINITY;
         let mut best_move = Move::NONE;
@@ -242,6 +235,8 @@ impl SearchWorker {
             // Move flags
             let is_capture = move_.is_capture();
             let is_promotion = move_.is_promotion();
+            let moved_piece = unsafe { self.ss_at(0).moved.unwrap_unchecked() };
+            let gives_check = self.board.in_check();
             // New depth
             let mut new_depth = depth.max(1) - 1;
 
@@ -329,22 +324,27 @@ impl SearchWorker {
             // and are not tactical using a reduced depth zero window search
             // to see if it is promising or not.
             let full_search = if self.can_do_lmr(depth, move_count, NT::PV) {
-                // Calculate dynamic depth reduction
-                let mut r = lmr_base_reduction(depth, move_count);
-                // Increase reductions for moves we think might be bad
-                r += !NT::PV as Depth;
-                r += !improving as Depth;
-                r += tt_capture as Depth;
-                // Decrease reductions for moves we think might be good
-                r -= in_check as Depth;
-                r -= self.board.in_check() as Depth;
-                // We don't want to extend or go into qsearch.
-                // Since we have checked for qsearch, depth is guaranteed to be >= 1.
+                let mut r;
+                if !is_capture {
+                    r = lmr_base_reduction(depth, move_count);
+                    // Increase for non PV, non improving (less promising)
+                    r += !NT::PV as Depth + !improving as Depth;
+                    // Increase for evasion (less promising)
+                    r += (in_check && moved_piece.pt() == PieceType::King) as Depth;
+                    // Reduce for killers and counters
+                    r -= (mp.stage <= MoveStage::GenQuiets) as Depth;
+                // Different logic for capture moves
+                } else {
+                    r = 1;
+                    // Reduce for moves that give check (Tactical)
+                    r -= gives_check as Depth;
+                }
+
                 r = r.clamp(1, depth - 1);
 
-                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth - r, false);
+                value = -self.nw_search(tt, &mut child_pv, -alpha - Eval(1), new_depth - r, true);
 
-                value > alpha && r > 1
+                value > alpha && r != 1
             } else {
                 !NT::PV || move_count > 1
             };
